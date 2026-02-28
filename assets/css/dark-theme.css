@@ -1,0 +1,97 @@
+[theme="dark-theme"] .mnz-dse-panel,
+[theme="dark-theme"] .mnz-dse-card,
+[theme="hc-dark"] .mnz-dse-panel,
+[theme="hc-dark"] .mnz-dse-card {
+	background: #2b2b2b;
+	border-color: rgba(255, 255, 255, 0.14);
+}
+
+[theme="dark-theme"] .mnz-dse-title,
+[theme="dark-theme"] .mnz-dse-v,
+[theme="hc-dark"] .mnz-dse-title,
+[theme="hc-dark"] .mnz-dse-v {
+	color: #e5e7eb;
+}
+
+[theme="dark-theme"] .mnz-dse-label,
+[theme="dark-theme"] .mnz-dse-k,
+[theme="dark-theme"] .mnz-dse-section-title,
+[theme="dark-theme"] .mnz-dse-bar-lbl,
+[theme="dark-theme"] .mnz-dse-empty,
+[theme="hc-dark"] .mnz-dse-label,
+[theme="hc-dark"] .mnz-dse-k,
+[theme="hc-dark"] .mnz-dse-section-title,
+[theme="hc-dark"] .mnz-dse-bar-lbl,
+[theme="hc-dark"] .mnz-dse-empty {
+	color: #9ca3af;
+}
+
+[theme="dark-theme"] .mnz-dse-input,
+[theme="dark-theme"] .mnz-dse-multi,
+[theme="hc-dark"] .mnz-dse-input,
+[theme="hc-dark"] .mnz-dse-multi {
+	background: #363636;
+	border-color: rgba(255, 255, 255, 0.2);
+	color: #e5e7eb;
+}
+
+[theme="dark-theme"] .mnz-dse-ms-toggle,
+[theme="hc-dark"] .mnz-dse-ms-toggle {
+	background: #363636;
+	border-color: rgba(255, 255, 255, 0.2);
+	color: #e5e7eb;
+}
+
+[theme="dark-theme"] .mnz-dse-ms-panel,
+[theme="hc-dark"] .mnz-dse-ms-panel {
+	background: #2b2b2b;
+	border-color: rgba(255, 255, 255, 0.2);
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+[theme="dark-theme"] .mnz-dse-ms-search,
+[theme="dark-theme"] .mnz-dse-ms-actions button,
+[theme="hc-dark"] .mnz-dse-ms-search,
+[theme="hc-dark"] .mnz-dse-ms-actions button {
+	background: #1f2937;
+	border-color: rgba(255, 255, 255, 0.2);
+	color: #e5e7eb;
+}
+
+[theme="dark-theme"] .mnz-dse-ms-actions button:hover,
+[theme="hc-dark"] .mnz-dse-ms-actions button:hover {
+	background: #273449;
+}
+
+[theme="dark-theme"] .mnz-dse-ms-row,
+[theme="hc-dark"] .mnz-dse-ms-row {
+	color: #d1d5db;
+}
+
+[theme="dark-theme"] .mnz-dse-gap-good,
+[theme="dark-theme"] .mnz-dse-status-good,
+[theme="hc-dark"] .mnz-dse-gap-good,
+[theme="hc-dark"] .mnz-dse-status-good {
+	color: #4ade80;
+}
+
+[theme="dark-theme"] .mnz-dse-gap-bad,
+[theme="dark-theme"] .mnz-dse-status-bad,
+[theme="hc-dark"] .mnz-dse-gap-bad,
+[theme="hc-dark"] .mnz-dse-status-bad {
+	color: #f87171;
+}
+
+[theme="dark-theme"] .mnz-dse-heatmap-h,
+[theme="dark-theme"] .mnz-dse-heatmap-w,
+[theme="hc-dark"] .mnz-dse-heatmap-h,
+[theme="hc-dark"] .mnz-dse-heatmap-w {
+	background: #1f2937;
+	color: #cbd5e1;
+}
+
+[theme="dark-theme"] .mnz-dse-heatmap-cell,
+[theme="hc-dark"] .mnz-dse-heatmap-cell {
+	color: #e5e7eb;
+	border-color: rgba(255, 255, 255, 0.1);
+}

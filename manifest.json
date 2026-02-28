@@ -1,0 +1,27 @@
+{
+	"manifest_version": 2,
+	"id": "dynamic-sla-enterprise",
+	"name": "Dynamic SLA Enterprise",
+	"version": "1.0",
+	"namespace": "DynamicSlaEnterprise",
+	"author": "Monzphere",
+	"url": "https://monzphere.com",
+	"description": "Enterprise dynamic SLA analytics from incidents with multi filters.",
+	"actions": {
+		"dynamic.sla.enterprise.view": {
+			"class": "CControllerDynamicSlaEnterpriseView",
+			"view": "dynamic.sla.enterprise.view",
+			"layout": "layout.htmlpage"
+		},
+		"dynamic.sla.enterprise.data": {
+			"class": "CControllerDynamicSlaEnterpriseData"
+		}
+	},
+	"assets": {
+		"css": [
+			"blue-theme.css",
+			"dark-theme.css"
+		],
+		"js": []
+	}
+}

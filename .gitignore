@@ -1,0 +1,42 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs / temp
+*.log
+*.tmp
+*.bak
+*.orig
+
+# Runtime / local debug artifacts
+tmp/
+cache/
+debug/
+storage/
+uploads/
+*.pid
+
+# Node / frontend build artifacts (if used)
+node_modules/
+dist/
+build/
+coverage/
+npm-debug.log*
+yarn-error.log*
+
+# PHP dependencies / tools (if used locally)
+vendor/
+.phpunit.result.cache
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Git
+*.rej
