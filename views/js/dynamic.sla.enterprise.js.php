@@ -51,6 +51,27 @@ jQuery(function() {
 			.text(message || '');
 	}
 
+	function hasSelectedGroups() {
+		var vals = jQuery('#dse-groupids').val() || [];
+		if (!Array.isArray(vals)) {
+			vals = [vals];
+		}
+		return vals.filter(Boolean).length > 0;
+	}
+
+	function setResultsCollapsed(collapsed) {
+		var ids = ['#dse-debug', '#dse-exec', '#dse-summary', '#dse-daily', '#dse-heatmap', '#dse-top-triggers', '#dse-timeline'];
+		ids.forEach(function(id) {
+			if (collapsed) {
+				jQuery(id).hide().empty();
+			}
+			else {
+				jQuery(id).show();
+			}
+		});
+		jQuery('#dse-run').prop('disabled', collapsed);
+	}
+
 	function renderDebugJson(debugObj) {
 		var $box = jQuery('#dse-debug');
 		if (!$box.length) {
@@ -310,7 +331,19 @@ jQuery(function() {
 		}
 	}
 
+	function clearDependentSelectors() {
+		populateSelect('#dse-hostids', [], []);
+		populateSelect('#dse-triggerids', [], []);
+	}
+
 	function loadOptions(triggeredBy) {
+		if (!hasSelectedGroups() && triggeredBy !== 'init' && triggeredBy !== 'groups') {
+			setResultsCollapsed(true);
+			clearDependentSelectors();
+			setStatus('Select at least one Host group to enable calculation.', 'ok');
+			return jQuery.Deferred().resolve().promise();
+		}
+
 		var payload = buildBasePayload();
 		payload.mode = 'options';
 
@@ -376,9 +409,13 @@ jQuery(function() {
 				'ok'
 			);
 
-			// Keep cards/charts/timeline aligned with current filter selection.
-			if (triggeredBy !== 'init') {
-				run();
+			if (!hasSelectedGroups()) {
+				setResultsCollapsed(true);
+				clearDependentSelectors();
+				setStatus('Select at least one Host group to enable calculation.', 'ok');
+			}
+			else {
+				setResultsCollapsed(false);
 			}
 		}).always(function() {
 			jQuery('#dse-refresh-options').prop('disabled', false);
@@ -515,6 +552,10 @@ jQuery(function() {
 
 	function renderTimeline(data) {
 		var rows = Array.isArray(data.timeline) ? data.timeline : [];
+		var total = Number(data.timeline_total || rows.length || 0);
+		if (!isFinite(total) || total < 0) {
+			total = rows.length;
+		}
 		if (!rows.length) {
 			jQuery('#dse-timeline').html('<div class="mnz-dse-panel"><div class="mnz-dse-empty">' + (d.noDataLabel || 'No data') + '</div></div>');
 			return;
@@ -534,7 +575,9 @@ jQuery(function() {
 				'<td>' + String(row.duration || '-') + '</td>' +
 			'</tr>';
 		});
-		html += '</tbody></table></div>';
+		html += '</tbody></table>' +
+			'<div class="mnz-dse-table-meta">Displaying ' + rows.length + ' of ' + total + ' found</div>' +
+			'</div>';
 		jQuery('#dse-timeline').html(html);
 	}
 
@@ -553,6 +596,13 @@ jQuery(function() {
 	}
 
 	function run() {
+		if (!hasSelectedGroups()) {
+			setResultsCollapsed(true);
+			setStatus('Select at least one Host group to calculate SLA.', 'error');
+			return;
+		}
+		setResultsCollapsed(false);
+
 		var btn = jQuery('#dse-run');
 		btn.prop('disabled', true).text(d.loadingLabel || 'Calculating...');
 		setStatus('');
@@ -592,6 +642,14 @@ jQuery(function() {
 		loadOptions('period');
 	});
 	jQuery('#dse-groupids').on('change', function() {
+		if (!hasSelectedGroups()) {
+			setResultsCollapsed(true);
+			clearDependentSelectors();
+			setStatus('Select at least one Host group to enable calculation.', 'ok');
+		}
+		else {
+			setResultsCollapsed(false);
+		}
 		loadOptions('groups');
 	});
 	jQuery('#dse-hostids').on('change', function() {
@@ -618,7 +676,11 @@ jQuery(function() {
 	});
 	applyPeriodPreset();
 	setupMultiSelects();
+	setResultsCollapsed(true);
+	setStatus('Select at least one Host group to enable calculation.', 'ok');
 	loadOptions('init').always(function() {
-		run();
+		if (hasSelectedGroups()) {
+			setResultsCollapsed(false);
+		}
 	});
 });

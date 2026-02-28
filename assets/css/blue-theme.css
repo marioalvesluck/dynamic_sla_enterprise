@@ -286,7 +286,7 @@
 	display: flex;
 	gap: 4px;
 	align-items: flex-end;
-	overflow-x: auto;
+	height: 118px;
 	padding-bottom: 8px;
 }
 
@@ -294,7 +294,8 @@
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	min-width: 26px;
+	flex: 1;
+	min-width: 0;
 }
 
 .mnz-dse-bar-val {
@@ -306,7 +307,8 @@
 }
 
 .mnz-dse-bar {
-	width: 16px;
+	width: 100%;
+	max-width: 24px;
 	background: #0ea5e9;
 	border-radius: 3px 3px 0 0;
 }
@@ -320,13 +322,14 @@
 .mnz-dse-heatmap-grid {
 	display: grid;
 	gap: 2px;
-	overflow-x: auto;
+	width: 100%;
 }
 
 .mnz-dse-heatmap-row {
 	display: grid;
-	grid-template-columns: 44px repeat(24, 28px);
+	grid-template-columns: 44px repeat(24, minmax(0, 1fr));
 	gap: 2px;
+	width: 100%;
 }
 
 .mnz-dse-heatmap-head {
@@ -372,6 +375,13 @@
 	font-style: italic;
 }
 
+.mnz-dse-table-meta {
+	margin-top: 8px;
+	font-size: 12px;
+	color: #64748b;
+	text-align: right;
+}
+
 @media (max-width: 1280px) {
 	.mnz-dse-filters {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -388,7 +398,17 @@
 	.mnz-dse-cards-exec {
 		grid-template-columns: 1fr;
 	}
+	.mnz-dse-daily-bars {
+		overflow-x: auto;
+	}
+	.mnz-dse-bar-item {
+		min-width: 28px;
+		flex: 0 0 auto;
+	}
 	.mnz-dse-heatmap-row {
 		grid-template-columns: 34px repeat(24, 24px);
+	}
+	.mnz-dse-heatmap-grid {
+		overflow-x: auto;
 	}
 }

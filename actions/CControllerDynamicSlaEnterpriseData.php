@@ -229,6 +229,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			];
 		}
 
+		$timeline_limited = array_slice($timeline_rows, 0, 200);
+
 		return [
 			'groups' => $groups_out,
 			'hosts' => $hosts_out,
@@ -416,7 +418,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'top_triggers' => $top_triggers,
 			'daily' => $daily,
 			'heatmap' => $heatmap,
-			'timeline' => array_slice($timeline_rows, 0, 200)
+			'timeline' => $timeline_limited,
+			'timeline_total' => count($timeline_rows)
 		];
 	}
 
