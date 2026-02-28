@@ -206,3 +206,22 @@
 	border-color: rgba(255, 255, 255, 0.2);
 	color: #e5e7eb;
 }
+
+[theme="dark-theme"] .mnz-dse-actions,
+[theme="hc-dark"] .mnz-dse-actions {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+}
+
+[theme="dark-theme"] .mnz-dse-actions .btn-alt,
+[theme="hc-dark"] .mnz-dse-actions .btn-alt {
+	width: 100%;
+}
+
+@media (max-width: 860px) {
+	[theme="dark-theme"] .mnz-dse-actions,
+	[theme="hc-dark"] .mnz-dse-actions {
+		grid-template-columns: 1fr;
+	}
+}

@@ -198,6 +198,8 @@
 	grid-column: 4;
 	justify-self: stretch;
 	align-self: end;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
 	justify-content: flex-end;
 	gap: 8px;
 }
@@ -746,6 +748,7 @@
 	}
 	.mnz-dse-actions {
 		grid-column: 1;
+		grid-template-columns: 1fr;
 	}
 	.mnz-dse-daily-bars {
 		overflow-x: auto;
