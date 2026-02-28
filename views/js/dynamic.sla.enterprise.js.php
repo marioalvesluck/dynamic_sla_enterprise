@@ -10,6 +10,7 @@ jQuery(function() {
 	delete window.mnzDseData;
 	var incidentMode = 'starts';
 	var lastCalculatedData = null;
+	var tablePagerState = {};
 
 	function fmtDateInput(ts) {
 		var dt = new Date(ts * 1000);
@@ -217,12 +218,61 @@ jQuery(function() {
 			.replace(/"/g, '&quot;');
 	}
 
-	function applyTableFilter($table, query) {
-		var q = String(query || '').toLowerCase().trim();
-		$table.find('tbody tr').each(function() {
-			var txt = String(jQuery(this).text() || '').toLowerCase();
-			jQuery(this).toggle(!q || txt.indexOf(q) >= 0);
+	function getTablePagerState(tableId, defaultLimit) {
+		if (!tablePagerState[tableId]) {
+			tablePagerState[tableId] = {
+				page: 1,
+				limit: Number(defaultLimit || 25)
+			};
+		}
+		return tablePagerState[tableId];
+	}
+
+	function applyTableView(tableId) {
+		var $table = jQuery('#' + tableId);
+		if (!$table.length) {
+			return;
+		}
+		var state = getTablePagerState(tableId, 50);
+		var $tbody = $table.find('tbody');
+		var rows = $tbody.find('tr').get();
+		var $filter = jQuery('.mnz-dse-table-filter[data-filter-target="#' + tableId + '"]');
+		var query = String(($filter.val && $filter.val()) || '').toLowerCase().trim();
+
+		var filtered = rows.filter(function(row) {
+			if (!query) {
+				return true;
+			}
+			var txt = String(jQuery(row).text() || '').toLowerCase();
+			return txt.indexOf(query) >= 0;
 		});
+
+		var total = filtered.length;
+		var limit = Math.max(1, Number(state.limit || 50));
+		var totalPages = Math.max(1, Math.ceil(total / limit));
+		if (state.page > totalPages) {
+			state.page = totalPages;
+		}
+		if (state.page < 1) {
+			state.page = 1;
+		}
+
+		var start = (state.page - 1) * limit;
+		var end = start + limit;
+		var visibleRows = filtered.slice(start, end);
+		var visibleSet = new Set(visibleRows);
+
+		$tbody.find('tr').each(function() {
+			var show = visibleSet.has(this);
+			jQuery(this).toggle(show);
+		});
+
+		var shown = Math.max(0, Math.min(limit, total - start));
+		var metaText = 'Total: ' + total + ' | Page ' + state.page + '/' + totalPages + ' | Showing: ' + shown;
+		jQuery('.mnz-dse-table-meta[data-table="' + tableId + '"]').text(metaText);
+		jQuery('.mnz-dse-table-prev[data-table="' + tableId + '"]').prop('disabled', state.page <= 1);
+		jQuery('.mnz-dse-table-next[data-table="' + tableId + '"]').prop('disabled', state.page >= totalPages);
+		jQuery('.mnz-dse-table-limit[data-table="' + tableId + '"]').val(String(limit));
 	}
 
 	function updateMsToggle(select) {
@@ -661,6 +711,8 @@ jQuery(function() {
 		var totalMix = inBusiness + outBusiness;
 		var inPct = totalMix > 0 ? (inBusiness / totalMix) * 100 : 0;
 		var outPct = totalMix > 0 ? (outBusiness / totalMix) * 100 : 0;
+		var inBar = Math.max(0, Math.min(100, inPct));
+		var outBar = Math.max(0, Math.min(100, 100 - inBar));
 
 		var last14Values = Object.keys(dayBins).sort().slice(-14).map(function(k) { return dayBins[k]; });
 		var burnRate = last14Values.length ? (last14Values.reduce(function(a, b) { return a + b; }, 0) / last14Values.length) : 0;
@@ -682,7 +734,7 @@ jQuery(function() {
 				'<div><b>Recomendacao:</b> ' + (outPct > 60 ? 'avaliar janela de suporte fora do horario comercial.' : 'manter monitoracao atual e revisar picos.') + '</div>' +
 			'</div>' +
 			'<div class="mnz-dse-insights-grid">' +
-				'<div class="mnz-dse-insight-card"><div class="mnz-dse-k">Horario comercial vs fora</div><div class="mnz-dse-v2">' + inPct.toFixed(2) + '% / ' + outPct.toFixed(2) + '%</div></div>' +
+				'<div class="mnz-dse-insight-card"><div class="mnz-dse-k">Horario comercial vs fora</div><div class="mnz-dse-v2">' + inPct.toFixed(2) + '% / ' + outPct.toFixed(2) + '%</div><div class="mnz-dse-bizbar" title="In business: ' + inPct.toFixed(2) + '% | Outside: ' + outPct.toFixed(2) + '%"><span class="mnz-dse-bizbar-in" style="width:' + inBar.toFixed(2) + '%"></span><span class="mnz-dse-bizbar-out" style="width:' + outBar.toFixed(2) + '%"></span></div><div class="mnz-dse-bizbar-legend"><span><i class="mnz-dse-dot mnz-dse-dot-in"></i>In business</span><span><i class="mnz-dse-dot mnz-dse-dot-out"></i>Outside</span></div></div>' +
 				'<div class="mnz-dse-insight-card"><div class="mnz-dse-k">MTTR por severidade (pior)</div><div class="mnz-dse-v2">' + escapeHtml(worstSev) + ' - ' + fmtDownShort(worstMttr) + '</div></div>' +
 				'<div class="mnz-dse-insight-card"><div class="mnz-dse-k">SLO burn rate (14d)</div><div class="mnz-dse-v2">' + burnRate.toFixed(2) + '/dia (' + burnRisk + ')</div>' + bars + '</div>' +
 			'</div>' +
@@ -841,6 +893,8 @@ jQuery(function() {
 			}
 		});
 
+		var tableId = 'dse-top-triggers-table';
+		getTablePagerState(tableId, 25);
 		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Top triggers by downtime</div>' +
 			'<div class="mnz-dse-table-tools"><input type="text" class="mnz-dse-table-filter" data-filter-target="#dse-top-triggers-table" placeholder="Filter table..."></div>' +
 			'<table class="list-table" id="dse-top-triggers-table"><thead><tr>' +
@@ -876,8 +930,18 @@ jQuery(function() {
 				'<td><button type="button" class="btn-alt mnz-dse-exclude-btn" data-triggerid="' + row.triggerid + '">Exclude</button></td>' +
 			'</tr>';
 		});
-		html += '</tbody></table></div>';
+		html += '</tbody></table>' +
+			'<div class="mnz-dse-table-footer">' +
+				'<div class="mnz-dse-table-meta" data-table="' + tableId + '"></div>' +
+				'<div class="mnz-dse-table-pager">' +
+					'<label class="mnz-dse-limit-wrap">Limit <select class="mnz-dse-table-limit" data-table="' + tableId + '"><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option><option value="500">500</option></select></label>' +
+					'<button type="button" class="btn-alt mnz-dse-table-prev" data-table="' + tableId + '">&lt; Prev</button>' +
+					'<button type="button" class="btn-alt mnz-dse-table-next" data-table="' + tableId + '">Next &gt;</button>' +
+				'</div>' +
+			'</div>' +
+			'</div>';
 		jQuery('#dse-top-triggers').html(html);
+		applyTableView(tableId);
 	}
 
 	function renderHostsImpact(data) {
@@ -919,6 +983,8 @@ jQuery(function() {
 			return;
 		}
 
+		var tableId = 'dse-timeline-table';
+		getTablePagerState(tableId, 25);
 		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Timeline</div>' +
 			'<div class="mnz-dse-table-tools"><input type="text" class="mnz-dse-table-filter" data-filter-target="#dse-timeline-table" placeholder="Filter table..."></div>' +
 			'<table class="list-table" id="dse-timeline-table"><thead><tr>' +
@@ -951,9 +1017,17 @@ jQuery(function() {
 			'</tr>';
 		});
 		html += '</tbody></table>' +
-			'<div class="mnz-dse-table-meta">Displaying ' + rows.length + ' of ' + total + ' found</div>' +
+			'<div class="mnz-dse-table-footer">' +
+				'<div class="mnz-dse-table-meta" data-table="' + tableId + '">Total loaded: ' + rows.length + ' | API total: ' + total + '</div>' +
+				'<div class="mnz-dse-table-pager">' +
+					'<label class="mnz-dse-limit-wrap">Limit <select class="mnz-dse-table-limit" data-table="' + tableId + '"><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option><option value="500">500</option></select></label>' +
+					'<button type="button" class="btn-alt mnz-dse-table-prev" data-table="' + tableId + '">&lt; Prev</button>' +
+					'<button type="button" class="btn-alt mnz-dse-table-next" data-table="' + tableId + '">Next &gt;</button>' +
+				'</div>' +
+			'</div>' +
 			'</div>';
 		jQuery('#dse-timeline').html(html);
+		applyTableView(tableId);
 	}
 
 	function parseError(jqXHR, fallback) {
@@ -1073,7 +1147,12 @@ jQuery(function() {
 		if (!$table.length) {
 			return;
 		}
-		applyTableFilter($table, jQuery(this).val());
+		var tableId = String($table.attr('id') || '');
+		if (!tableId) {
+			return;
+		}
+		getTablePagerState(tableId, 50).page = 1;
+		applyTableView(tableId);
 	});
 	jQuery(document).on('click', '.mnz-dse-sortable', function() {
 		var $th = jQuery(this);
@@ -1117,10 +1196,39 @@ jQuery(function() {
 		$th.closest('tr').find('.mnz-dse-sortable').removeClass('mnz-dse-sort-asc mnz-dse-sort-desc');
 		$th.addClass(nextDir === 'asc' ? 'mnz-dse-sort-asc' : 'mnz-dse-sort-desc');
 
-		var $filter = jQuery('.mnz-dse-table-filter[data-filter-target="#' + $table.attr('id') + '"]');
-		if ($filter.length) {
-			applyTableFilter($table, $filter.val());
+		var tableId = String($table.attr('id') || '');
+		if (tableId) {
+			getTablePagerState(tableId, 50).page = 1;
+			applyTableView(tableId);
 		}
+	});
+	jQuery(document).on('change', '.mnz-dse-table-limit', function() {
+		var tableId = String(jQuery(this).data('table') || '');
+		if (!tableId) {
+			return;
+		}
+		var state = getTablePagerState(tableId, 50);
+		state.limit = Math.max(1, Number(jQuery(this).val() || 50));
+		state.page = 1;
+		applyTableView(tableId);
+	});
+	jQuery(document).on('click', '.mnz-dse-table-prev', function() {
+		var tableId = String(jQuery(this).data('table') || '');
+		if (!tableId) {
+			return;
+		}
+		var state = getTablePagerState(tableId, 50);
+		state.page = Math.max(1, Number(state.page || 1) - 1);
+		applyTableView(tableId);
+	});
+	jQuery(document).on('click', '.mnz-dse-table-next', function() {
+		var tableId = String(jQuery(this).data('table') || '');
+		if (!tableId) {
+			return;
+		}
+		var state = getTablePagerState(tableId, 50);
+		state.page = Number(state.page || 1) + 1;
+		applyTableView(tableId);
 	});
 	jQuery(document).on('click', function() {
 		jQuery('.mnz-dse-ms').removeClass('is-open');

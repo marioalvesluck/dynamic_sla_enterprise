@@ -22,6 +22,7 @@
 [theme="dark-theme"] .mnz-dse-section-title,
 [theme="dark-theme"] .mnz-dse-bar-val,
 [theme="dark-theme"] .mnz-dse-bar-lbl,
+[theme="dark-theme"] .mnz-dse-bizbar-legend,
 [theme="dark-theme"] .mnz-dse-insights-list,
 [theme="dark-theme"] .mnz-dse-table-meta,
 [theme="dark-theme"] .mnz-dse-empty,
@@ -30,6 +31,7 @@
 [theme="hc-dark"] .mnz-dse-section-title,
 [theme="hc-dark"] .mnz-dse-bar-val,
 [theme="hc-dark"] .mnz-dse-bar-lbl,
+[theme="hc-dark"] .mnz-dse-bizbar-legend,
 [theme="hc-dark"] .mnz-dse-insights-list,
 [theme="hc-dark"] .mnz-dse-table-meta,
 [theme="hc-dark"] .mnz-dse-empty {
@@ -170,8 +172,10 @@
 
 [theme="dark-theme"] .mnz-dse-impact-bar,
 [theme="dark-theme"] .mnz-dse-hostimpact-bar,
+[theme="dark-theme"] .mnz-dse-bizbar,
 [theme="hc-dark"] .mnz-dse-impact-bar,
-[theme="hc-dark"] .mnz-dse-hostimpact-bar {
+[theme="hc-dark"] .mnz-dse-hostimpact-bar,
+[theme="hc-dark"] .mnz-dse-bizbar {
 	background: #334155;
 }
 
@@ -186,6 +190,18 @@
 
 [theme="dark-theme"] .mnz-dse-table-filter,
 [theme="hc-dark"] .mnz-dse-table-filter {
+	background: #1f2937;
+	border-color: rgba(255, 255, 255, 0.2);
+	color: #e5e7eb;
+}
+
+[theme="dark-theme"] .mnz-dse-limit-wrap,
+[theme="hc-dark"] .mnz-dse-limit-wrap {
+	color: #9ca3af;
+}
+
+[theme="dark-theme"] .mnz-dse-table-limit,
+[theme="hc-dark"] .mnz-dse-table-limit {
 	background: #1f2937;
 	border-color: rgba(255, 255, 255, 0.2);
 	color: #e5e7eb;
