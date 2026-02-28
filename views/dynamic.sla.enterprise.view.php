@@ -3,7 +3,7 @@
 require_once dirname(__FILE__).'/../../../include/html.inc.php';
 
 $html_page = (new CHtmlPage())
-	->setTitle(_('Dynamic SLA Enterprise'))
+	->setTitle(_('Inteligence Enterprise'))
 	->setDocUrl('')
 	->setControls(
 		(new CTag('nav', true,
@@ -33,12 +33,6 @@ $html_page = (new CHtmlPage())
 						->addClass(ZBX_STYLE_BTN_ALT)
 				)
 				->addItem(
-					(new CTextBox('dse-save-view-name', ''))
-						->setId('dse-save-view-name')
-						->setAttribute('placeholder', _('View name'))
-						->addClass('mnz-dse-top-input')
-				)
-				->addItem(
 					(new CButton('dse-save-view', _('Save as')))
 						->setId('dse-save-view')
 						->addClass(ZBX_STYLE_BTN_ALT)
@@ -53,6 +47,18 @@ $html_page = (new CHtmlPage())
 $content = (new CDiv())->addClass('mnz-dse-wrapper');
 $sheet = (new CDiv())->addClass('mnz-dse-inner-sheet');
 $sheet->addItem((new CDiv())->setId('dse-saved-views')->addClass('mnz-dse-saved-views'));
+$sheet->addItem((new CDiv([
+	(new CDiv([
+		(new CTag('h3', true, _('Save view')))->addClass('mnz-dse-save-title'),
+		(new CTextBox('dse-save-view-name', ''))
+			->setId('dse-save-view-name')
+			->setAttribute('placeholder', _('View name')),
+		(new CDiv([
+			(new CButton('dse-save-view-confirm', _('Save')))->setId('dse-save-view-confirm')->addClass(ZBX_STYLE_BTN_ALT),
+			(new CButton('dse-save-view-cancel', _('Cancel')))->setId('dse-save-view-cancel')->addClass(ZBX_STYLE_BTN_ALT)
+		]))->addClass('mnz-dse-save-actions')
+	]))->addClass('mnz-dse-save-dialog')
+]))->setId('dse-save-overlay')->addClass('mnz-dse-save-overlay'));
 
 $filters = (new CDiv([
 	(new CDiv([
@@ -84,6 +90,13 @@ $filters = (new CDiv([
 		(new CTextBox('exclude_triggerids', ''))
 			->setId('dse-exclude-triggerids')
 			->setAttribute('placeholder', _('Ex.: 17000,17010'))
+			->addClass('mnz-dse-input')
+	]))->addClass('mnz-dse-field'),
+	(new CDiv([
+		(new CLabel(_('Exclude incident IDs'), 'dse-exclude-incidentids'))->addClass('mnz-dse-label'),
+		(new CTextBox('exclude_incidentids', ''))
+			->setId('dse-exclude-incidentids')
+			->setAttribute('placeholder', _('Ex.: 186534,186533'))
 			->addClass('mnz-dse-input')
 	]))->addClass('mnz-dse-field'),
 	(new CDiv([

@@ -2,7 +2,7 @@
 	'use strict';
 
 	var ACTION = 'dynamic.sla.enterprise.view';
-	var LABEL = 'Dynamic SLA Enterprise';
+	var LABEL = 'Inteligence Enterprise';
 	var ITEM_CLASS = 'mnz-dse-nav-item';
 
 	function getActionFromUrl(url) {

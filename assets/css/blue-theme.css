@@ -9,9 +9,45 @@
 	padding: 14px;
 }
 
-.mnz-dse-top-input {
-	min-width: 180px;
-	height: 32px;
+.mnz-dse-save-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(2, 6, 23, 0.35);
+	display: none;
+	align-items: center;
+	justify-content: center;
+	z-index: 3000;
+}
+
+.mnz-dse-save-overlay.is-open {
+	display: flex;
+}
+
+.mnz-dse-save-dialog {
+	width: min(420px, calc(100vw - 40px));
+	background: #fff;
+	border: 1px solid rgba(0, 0, 0, 0.16);
+	border-radius: 10px;
+	padding: 14px;
+	box-shadow: 0 14px 32px rgba(15, 23, 42, 0.25);
+}
+
+.mnz-dse-save-title {
+	margin: 0 0 10px;
+	font-size: 14px;
+	font-weight: 700;
+	color: #1e293b;
+}
+
+#dse-save-view-name {
+	width: 100%;
+}
+
+.mnz-dse-save-actions {
+	margin-top: 10px;
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
 }
 
 .mnz-dse-saved-views {

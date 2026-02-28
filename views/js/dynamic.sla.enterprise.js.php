@@ -154,6 +154,7 @@ jQuery(function() {
 			hostids: toStringArray(jQuery('#dse-hostids').val() || []),
 			triggerids: toStringArray(jQuery('#dse-triggerids').val() || []),
 			exclude_triggerids: String(jQuery('#dse-exclude-triggerids').val() || ''),
+			exclude_incidentids: String(jQuery('#dse-exclude-incidentids').val() || ''),
 			impact_level: String(jQuery('#dse-impact-level').val() || 'all'),
 			period: String(jQuery('#dse-period').val() || '30d'),
 			from: String(jQuery('#dse-from').val() || ''),
@@ -190,8 +191,8 @@ jQuery(function() {
 		jQuery('#dse-saved-views').html(html);
 	}
 
-	function saveCurrentView() {
-		var name = String(jQuery('#dse-save-view-name').val() || '').trim();
+	function saveCurrentView(nameInput) {
+		var name = String(nameInput != null ? nameInput : (jQuery('#dse-save-view-name').val() || '')).trim();
 		if (!name) {
 			setStatus('Type a view name before Save as.', 'error');
 			return;
@@ -226,7 +227,17 @@ jQuery(function() {
 
 		setSavedViews(views);
 		renderSavedViews();
+		closeSaveAsDialog();
 		setStatus('View saved: ' + name, 'ok');
+	}
+
+	function openSaveAsDialog() {
+		jQuery('#dse-save-view-name').val('').trigger('focus');
+		jQuery('#dse-save-overlay').addClass('is-open');
+	}
+
+	function closeSaveAsDialog() {
+		jQuery('#dse-save-overlay').removeClass('is-open');
 	}
 
 	function applySavedView(viewId) {
@@ -248,6 +259,7 @@ jQuery(function() {
 		jQuery('#dse-save-view-name').val(String(view.name || ''));
 		jQuery('#dse-report-persona').val(String(state.persona || 'noc'));
 		jQuery('#dse-exclude-triggerids').val(String(state.exclude_triggerids || ''));
+		jQuery('#dse-exclude-incidentids').val(String(state.exclude_incidentids || ''));
 		jQuery('#dse-impact-level').val(String(state.impact_level || 'all'));
 		jQuery('#dse-period').val(String(state.period || '30d'));
 		jQuery('#dse-from').val(String(state.from || ''));
@@ -732,6 +744,7 @@ jQuery(function() {
 			severity: severity.severity,
 			severity_explicit: severity.severity_explicit,
 			exclude_triggerids: jQuery('#dse-exclude-triggerids').val(),
+			exclude_incidentids: jQuery('#dse-exclude-incidentids').val(),
 			impact_level: jQuery('#dse-impact-level').val(),
 			business_mode: jQuery('#dse-business-mode').val(),
 			business_start: jQuery('#dse-business-start').val(),
@@ -1128,6 +1141,15 @@ jQuery(function() {
 		jQuery('#dse-exclude-triggerids').val(arr.filter(Boolean).join(','));
 	}
 
+	function appendExcludedIncident(id) {
+		var current = String(jQuery('#dse-exclude-incidentids').val() || '').trim();
+		var arr = current ? current.split(/[\s,;]+/) : [];
+		if (arr.indexOf(String(id)) < 0) {
+			arr.push(String(id));
+		}
+		jQuery('#dse-exclude-incidentids').val(arr.filter(Boolean).join(','));
+	}
+
 	function renderTopTriggers(data) {
 		var rows = Array.isArray(data.top_triggers) ? data.top_triggers : [];
 		if (!rows.length) {
@@ -1234,9 +1256,10 @@ jQuery(function() {
 
 		var tableId = 'dse-timeline-table';
 		getTablePagerState(tableId, 25);
-		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Timeline</div>' +
+		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Problem</div>' +
 			'<div class="mnz-dse-table-tools"><input type="text" class="mnz-dse-table-filter" data-filter-target="#dse-timeline-table" placeholder="Filter table..."></div>' +
 			'<table class="list-table" id="dse-timeline-table"><thead><tr>' +
+			'<th class="mnz-dse-sortable" data-key="incidentid" data-type="num">Incident ID</th>' +
 			'<th class="mnz-dse-sortable" data-key="startts" data-type="num">Start time</th>' +
 			'<th class="mnz-dse-sortable" data-key="endts" data-type="num">Recovery time</th>' +
 			'<th class="mnz-dse-sortable" data-key="status" data-type="text">Status</th>' +
@@ -1244,18 +1267,22 @@ jQuery(function() {
 			'<th class="mnz-dse-sortable" data-key="host" data-type="text">Host</th>' +
 			'<th class="mnz-dse-sortable" data-key="trigger" data-type="text">Trigger</th>' +
 			'<th class="mnz-dse-sortable" data-key="duration" data-type="num">Duration</th>' +
+			'<th>Action</th>' +
 			'</tr></thead><tbody>';
 		rows.forEach(function(row) {
 			var start = row.start ? new Date(row.start * 1000).toLocaleString() : '-';
 			var end = row.end ? new Date(row.end * 1000).toLocaleString() : '-';
 			var statusCls = row.status === 'PROBLEM' ? 'mnz-dse-status-bad' : 'mnz-dse-status-good';
-			html += '<tr data-startts="' + Number(row.start || 0) + '"' +
+			var incidentId = Number(row.incidentid || 0);
+			html += '<tr data-incidentid="' + incidentId + '"' +
+				' data-startts="' + Number(row.start || 0) + '"' +
 				' data-endts="' + Number(row.end || 0) + '"' +
 				' data-status="' + escapeHtml(String(row.status || '-').toLowerCase()) + '"' +
 				' data-severity="' + Number(row.severity || 0) + '"' +
 				' data-host="' + escapeHtml(String(row.host || '-').toLowerCase()) + '"' +
 				' data-trigger="' + escapeHtml(String(row.trigger_name || '-').toLowerCase()) + '"' +
 				' data-duration="' + Number(row.duration_seconds || 0) + '">' +
+				'<td>' + (incidentId > 0 ? String(incidentId) : '-') + '</td>' +
 				'<td>' + start + '</td>' +
 				'<td>' + end + '</td>' +
 				'<td><span class="' + statusCls + '">' + String(row.status || '-') + '</span></td>' +
@@ -1263,6 +1290,7 @@ jQuery(function() {
 				'<td>' + String(row.host || '-').replace(/</g, '&lt;') + '</td>' +
 				'<td>' + String(row.trigger_name || '-').replace(/</g, '&lt;') + '</td>' +
 				'<td>' + String(row.duration || '-') + '</td>' +
+				'<td>' + (incidentId > 0 ? '<button type="button" class="btn-alt mnz-dse-exclude-incident-btn" data-incidentid="' + incidentId + '">Exclude</button>' : '-') + '</td>' +
 			'</tr>';
 		});
 		html += '</tbody></table>' +
@@ -1459,12 +1487,29 @@ jQuery(function() {
 	});
 	jQuery('#dse-save-view').on('click', function(e) {
 		e.preventDefault();
+		openSaveAsDialog();
+	});
+	jQuery('#dse-save-view-confirm').on('click', function(e) {
+		e.preventDefault();
 		saveCurrentView();
+	});
+	jQuery('#dse-save-view-cancel').on('click', function(e) {
+		e.preventDefault();
+		closeSaveAsDialog();
 	});
 	jQuery('#dse-save-view-name').on('keydown', function(e) {
 		if (e.key === 'Enter') {
 			e.preventDefault();
 			saveCurrentView();
+		}
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			closeSaveAsDialog();
+		}
+	});
+	jQuery('#dse-save-overlay').on('click', function(e) {
+		if (e.target === this) {
+			closeSaveAsDialog();
 		}
 	});
 	jQuery(document).on('click', '.mnz-dse-saved-tab', function(e) {
@@ -1488,6 +1533,10 @@ jQuery(function() {
 	});
 	jQuery(document).on('click', '.mnz-dse-exclude-btn', function() {
 		appendExcludedTrigger(jQuery(this).data('triggerid'));
+		run();
+	});
+	jQuery(document).on('click', '.mnz-dse-exclude-incident-btn', function() {
+		appendExcludedIncident(jQuery(this).data('incidentid'));
 		run();
 	});
 	jQuery(document).on('click', '.mnz-dse-mode-btn', function(e) {

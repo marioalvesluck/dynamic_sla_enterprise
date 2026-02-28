@@ -32,7 +32,7 @@ class CControllerDynamicSlaEnterpriseView extends CController {
 		];
 
 		$response = new CControllerResponseData($data);
-		$response->setTitle(_('Dynamic SLA Enterprise'));
+		$response->setTitle(_('Inteligence Enterprise'));
 		$this->setResponse($response);
 	}
 }

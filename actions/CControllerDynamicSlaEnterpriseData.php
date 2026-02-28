@@ -31,6 +31,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'groupids' => 'string',
 			'hostids' => 'string',
 			'triggerids' => 'string',
+			'exclude_incidentids' => 'string',
 			'severity' => 'string',
 			'severity_explicit' => 'string',
 			'impact_level' => 'string',
@@ -114,6 +115,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'groupids' => (string) $this->getInput('groupids', ''),
 			'hostids' => (string) $this->getInput('hostids', ''),
 			'triggerids' => (string) $this->getInput('triggerids', ''),
+			'exclude_incidentids' => (string) $this->getInput('exclude_incidentids', ''),
 			'severity' => (string) $this->getInput('severity', ''),
 			'severity_explicit' => (string) $this->getInput('severity_explicit', ''),
 			'impact_level' => (string) $this->getInput('impact_level', 'all'),
@@ -366,6 +368,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		$severity_explicit = false;
 		$severities = [];
 		$exclude_triggerids = array_flip($this->parseIds((string) $this->getInput('exclude_triggerids', '')));
+		$exclude_incidentids = array_flip($this->parseIds((string) $this->getInput('exclude_incidentids', '')));
 
 		$window_triggerids = $this->collectTriggerIdsWithIncidentsInWindow($from_ts, $to_ts, $groupids, $hostids, $severities);
 		$triggerids = $window_triggerids;
@@ -414,7 +417,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			return $this->buildEmptyPayload($from_ts, $to_ts, $slo_target, $groupids, $hostids, $severities, $business_mode, $business_start, $business_end, $exclude_maintenance, $exclude_triggerids, $impact_level);
 		}
 
-		$incidents = $this->buildIncidentIntervals($triggerids, $from_ts, $to_ts, $exclude_triggerids);
+		$incidents = $this->buildIncidentIntervals($triggerids, $from_ts, $to_ts, $exclude_triggerids, $exclude_incidentids);
 
 		$business_intervals = $this->buildBusinessIntervals($from_ts, $to_ts, $business_mode, $business_start, $business_end);
 		$denominator_intervals = $this->intersectLists([$window], $business_intervals);
@@ -425,8 +428,6 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		}
 
 		$downtime_intervals = [];
-		$per_trigger_downtime = [];
-		$per_trigger_last_start = [];
 		$timeline_rows = [];
 		foreach ($incidents as $incident) {
 			$overlaps = $this->intersectLists([['s' => $incident['s'], 'e' => $incident['e']]], $denominator_intervals);
@@ -444,13 +445,9 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			}
 
 			$tid = (int) $incident['triggerid'];
-			$per_trigger_downtime[$tid] = ($per_trigger_downtime[$tid] ?? 0) + $effective;
-			$start_ts = (int) ($effective_start ?? $incident['s']);
-			if (!isset($per_trigger_last_start[$tid]) || $start_ts > $per_trigger_last_start[$tid]) {
-				$per_trigger_last_start[$tid] = $start_ts;
-			}
 
 			$timeline_rows[] = [
+				'incidentid' => (int) ($incident['incidentid'] ?? 0),
 				'triggerid' => $tid,
 				'trigger_name' => $trigger_map[$tid]['name'] ?? _s('Trigger %1$s', (string) $tid),
 				'host' => $trigger_map[$tid]['host'] ?? '-',
@@ -469,7 +466,20 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		$downtime_intervals = $this->mergeIntervals($downtime_intervals);
 		$total_window = max(1, $this->sumIntervals($denominator_intervals));
 		$total_downtime = $this->sumIntervals($downtime_intervals);
-		// Sum of incident downtime (can exceed window when incidents overlap).
+		$per_trigger_downtime = [];
+		$per_trigger_last_start = [];
+		foreach ($timeline_rows as $row) {
+			$tid = (int) ($row['triggerid'] ?? 0);
+			if ($tid <= 0) {
+				continue;
+			}
+			$per_trigger_downtime[$tid] = ($per_trigger_downtime[$tid] ?? 0) + (int) ($row['duration_seconds'] ?? 0);
+			$start_ts = (int) ($row['start'] ?? 0);
+			if (!isset($per_trigger_last_start[$tid]) || $start_ts > $per_trigger_last_start[$tid]) {
+				$per_trigger_last_start[$tid] = $start_ts;
+			}
+		}
+		// Sum of incident downtime from same rows used by timeline/top tables.
 		$total_downtime_sum = (int) array_sum($per_trigger_downtime);
 		$total_uptime = max(0, $total_window - $total_downtime);
 		$availability = ($total_uptime / $total_window) * 100;
@@ -577,6 +587,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'severity' => $severities,
 				'impact_level' => $impact_level,
 				'exclude_triggerids' => array_map('intval', array_keys($exclude_triggerids)),
+				'exclude_incidentids' => array_map('intval', array_keys($exclude_incidentids)),
 				'business_mode' => $business_mode,
 				'business_start' => $business_start,
 				'business_end' => $business_end,
@@ -1013,6 +1024,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'severity' => $severities,
 				'impact_level' => $impact_level,
 				'exclude_triggerids' => array_map('intval', array_keys($exclude_triggerids)),
+				'exclude_incidentids' => [],
 				'business_mode' => $business_mode,
 				'business_start' => $business_start,
 				'business_end' => $business_end,
@@ -1120,7 +1132,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 	}
 
 
-	private function buildIncidentIntervals(array $triggerids, int $from_ts, int $to_ts, array $exclude_triggerids): array {
+	private function buildIncidentIntervals(array $triggerids, int $from_ts, int $to_ts, array $exclude_triggerids, array $exclude_incidentids = []): array {
 		$events = API::Event()->get([
 			'output' => ['eventid', 'objectid', 'clock', 'value', 'severity', 'name'],
 			'source' => EVENT_SOURCE_TRIGGERS,
@@ -1149,7 +1161,12 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				// duplicated starts inflating downtime when repeated PROBLEM
 				// events appear without an intermediate recovery.
 				if (!isset($pending[$tid])) {
+					$incidentid = (int) ($event['eventid'] ?? 0);
+					if ($incidentid > 0 && isset($exclude_incidentids[$incidentid])) {
+						continue;
+					}
 					$pending[$tid] = [
+						'incidentid' => $incidentid,
 						'clock' => $clock,
 						'severity' => (int) ($event['severity'] ?? 0),
 						'name' => (string) ($event['name'] ?? '')
@@ -1161,6 +1178,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			if (isset($pending[$tid])) {
 				$start = $pending[$tid];
 				$incidents[] = [
+					'incidentid' => (int) ($start['incidentid'] ?? 0),
 					'triggerid' => $tid,
 					's' => (int) $start['clock'],
 					'e' => $clock,
@@ -1176,6 +1194,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				continue;
 			}
 			$incidents[] = [
+				'incidentid' => (int) ($start['incidentid'] ?? 0),
 				'triggerid' => (int) $tid,
 				's' => (int) $start['clock'],
 				'e' => $to_ts,
@@ -1191,6 +1210,9 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			if ($e > $s) {
 				$incident['s'] = $s;
 				$incident['e'] = $e;
+				if (!isset($incident['incidentid'])) {
+					$incident['incidentid'] = 0;
+				}
 				$clipped[] = $incident;
 			}
 		}

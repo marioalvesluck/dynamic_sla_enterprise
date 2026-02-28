@@ -60,10 +60,27 @@
 	color: #e5e7eb;
 }
 
-[theme="dark-theme"] .mnz-dse-top-input,
-[theme="hc-dark"] .mnz-dse-top-input {
+[theme="dark-theme"] #dse-save-view-name,
+[theme="hc-dark"] #dse-save-view-name {
 	background: #363636;
 	border-color: rgba(255, 255, 255, 0.2);
+	color: #e5e7eb;
+}
+
+[theme="dark-theme"] .mnz-dse-save-overlay,
+[theme="hc-dark"] .mnz-dse-save-overlay {
+	background: rgba(0, 0, 0, 0.6);
+}
+
+[theme="dark-theme"] .mnz-dse-save-dialog,
+[theme="hc-dark"] .mnz-dse-save-dialog {
+	background: #1f1f1f;
+	border-color: rgba(255, 255, 255, 0.18);
+	box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);
+}
+
+[theme="dark-theme"] .mnz-dse-save-title,
+[theme="hc-dark"] .mnz-dse-save-title {
 	color: #e5e7eb;
 }
 

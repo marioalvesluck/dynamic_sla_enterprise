@@ -8,7 +8,7 @@ use CMenuItem;
 
 class Module extends CModule {
 	public function init(): void {
-		$menu_item = (new CMenuItem(_('Dynamic SLA Enterprise')))
+		$menu_item = (new CMenuItem(_('Inteligence Enterprise')))
 			->setAction('dynamic.sla.enterprise.view');
 
 		$services_submenu = APP::Component()

@@ -72,7 +72,7 @@ class CControllerDynamicSlaEnterpriseReport extends CController {
 				'source' => 'frontend_snapshot'
 			]
 		]);
-		$response->setTitle(_('Dynamic SLA Enterprise Report'));
+		$response->setTitle(_('Inteligence Enterprise Report'));
 		$this->setResponse($response);
 	}
 

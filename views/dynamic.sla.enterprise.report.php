@@ -306,7 +306,7 @@ if ($persona === 'noc') {
 	$noc_details_card = (new CDiv([
 		(new CTag('h3', true, _('Operational details'))),
 		(new CList())
-			->addItem(_('Timeline rows') . ': ' . count($timeline))
+			->addItem(_('Problem rows') . ': ' . count($timeline))
 			->addItem(_('Open incidents') . ': ' . $open_count)
 			->addItem(_('Resolved incidents') . ': ' . $resolved_count)
 			->addItem(_('Severity mix') . ': ' . $severity_line)
@@ -338,7 +338,7 @@ if ($persona === 'noc') {
 		]))->addClass('dse-rpt-chart-card'),
 		(new CTag('h3', true, _('Top triggers by downtime'))),
 		$top_triggers_table,
-		(new CTag('h3', true, _('Timeline'))),
+		(new CTag('h3', true, _('Problem'))),
 		$timeline_table
 	]))->addClass('dse-rpt-page dse-rpt-block');
 }
@@ -430,7 +430,7 @@ $wrapper = (new CDiv([
 ]))->setId('dse-rpt-wrapper');
 
 $html_page = (new CHtmlPage())
-	->setTitle(_('Dynamic SLA Enterprise Report'))
+	->setTitle(_('Inteligence Enterprise Report'))
 	->setDocUrl('');
 
 $js = 'document.addEventListener("DOMContentLoaded",function(){'
