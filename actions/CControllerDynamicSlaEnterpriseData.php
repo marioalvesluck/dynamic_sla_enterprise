@@ -8,7 +8,7 @@ use CRoleHelper;
 use Throwable;
 
 class CControllerDynamicSlaEnterpriseData extends CController {
-	private const OPTIONS_CACHE_TTL = 60;
+	private const OPTIONS_CACHE_TTL = 300;
 	private const CALC_CACHE_TTL = 120;
 
 	private static $response_cache = [];
@@ -43,7 +43,9 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'business_start' => 'string',
 			'business_end' => 'string',
 			'exclude_maintenance' => 'string',
-			'slo_target' => 'string'
+			'slo_target' => 'string',
+			'timeline_page' => 'string',
+			'timeline_limit' => 'string'
 		];
 
 		return $this->validateInput($fields);
@@ -128,6 +130,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'business_end' => (string) $this->getInput('business_end', '18:00'),
 			'exclude_maintenance' => (string) $this->getInput('exclude_maintenance', '1'),
 			'slo_target' => (string) $this->getInput('slo_target', '99.9'),
+			'timeline_page' => (string) $this->getInput('timeline_page', '1'),
+			'timeline_limit' => (string) $this->getInput('timeline_limit', '25'),
 			'userid' => (string) $this->getUserType()
 		];
 
@@ -357,6 +361,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		$exclude_maintenance = ((int) $this->getInput('exclude_maintenance', '1') === 1);
 		$slo_target = max(0.0, min(100.0, (float) $this->getInput('slo_target', '99.9')));
 		$impact_level = strtolower(trim((string) $this->getInput('impact_level', 'all')));
+		$timeline_page = max(1, (int) $this->getInput('timeline_page', '1'));
+		$timeline_limit = max(10, min(500, (int) $this->getInput('timeline_limit', '25')));
 
 		[$from_ts, $to_ts] = $this->resolveWindow($period, $from_input, $to_input);
 		$window = ['s' => $from_ts, 'e' => $to_ts];
@@ -550,7 +556,11 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 
 		$daily = $this->buildDailySeries($from_ts, $to_ts, $denominator_intervals, $downtime_intervals);
 		$heatmap = $this->buildHeatmap($timeline_rows);
-		$timeline_limited = array_slice($timeline_rows, 0, 200);
+		$timeline_total = count($timeline_rows);
+		$timeline_pages = max(1, (int) ceil($timeline_total / max(1, $timeline_limit)));
+		$timeline_page = min($timeline_page, $timeline_pages);
+		$timeline_offset = ($timeline_page - 1) * $timeline_limit;
+		$timeline_limited = array_slice($timeline_rows, $timeline_offset, $timeline_limit);
 
 		$risk = 'Low';
 		if ($availability < ($slo_target - 1.0) || count($timeline_rows) >= 10) {
@@ -607,7 +617,10 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'daily' => $daily,
 			'heatmap' => $heatmap,
 			'timeline' => $timeline_limited,
-			'timeline_total' => count($timeline_rows)
+			'timeline_total' => $timeline_total,
+			'timeline_page' => $timeline_page,
+			'timeline_limit' => $timeline_limit,
+			'timeline_pages' => $timeline_pages
 		];
 	}
 
@@ -1047,7 +1060,11 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'hour_labels' => ['0h', '1h', '2h', '3h', '4h', '5h', '6h', '7h', '8h', '9h', '10h', '11h', '12h', '13h', '14h', '15h', '16h', '17h', '18h', '19h', '20h', '21h', '22h', '23h'],
 				'matrix' => array_fill(0, 7, array_fill(0, 24, 0))
 			],
-			'timeline' => []
+			'timeline' => [],
+			'timeline_total' => 0,
+			'timeline_page' => 1,
+			'timeline_limit' => 25,
+			'timeline_pages' => 1
 		];
 	}
 
@@ -1133,74 +1150,112 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 
 
 	private function buildIncidentIntervals(array $triggerids, int $from_ts, int $to_ts, array $exclude_triggerids, array $exclude_incidentids = []): array {
-		$events = API::Event()->get([
-			'output' => ['eventid', 'objectid', 'clock', 'value', 'severity', 'name'],
-			'source' => EVENT_SOURCE_TRIGGERS,
-			'object' => EVENT_OBJECT_TRIGGER,
-			'objectids' => $triggerids,
-			'time_from' => max(0, $from_ts - (90 * 86400)),
-			'time_till' => $to_ts,
-			'sortfield' => ['clock', 'eventid'],
-			'sortorder' => 'ASC',
-			'limit' => 200000,
-			'preservekeys' => false
-		]);
-
-		$pending = [];
-		$incidents = [];
-		foreach ($events as $event) {
-			$tid = (int) ($event['objectid'] ?? 0);
-			if (isset($exclude_triggerids[$tid])) {
-				continue;
-			}
-			$clock = (int) ($event['clock'] ?? 0);
-			$value = (int) ($event['value'] ?? 0);
-
-			if ($value === 1) {
-				// Keep only one open problem interval per trigger to avoid
-				// duplicated starts inflating downtime when repeated PROBLEM
-				// events appear without an intermediate recovery.
-				if (!isset($pending[$tid])) {
-					$incidentid = (int) ($event['eventid'] ?? 0);
-					if ($incidentid > 0 && isset($exclude_incidentids[$incidentid])) {
-						continue;
-					}
-					$pending[$tid] = [
-						'incidentid' => $incidentid,
-						'clock' => $clock,
-						'severity' => (int) ($event['severity'] ?? 0),
-						'name' => (string) ($event['name'] ?? '')
-					];
-				}
-				continue;
-			}
-
-			if (isset($pending[$tid])) {
-				$start = $pending[$tid];
-				$incidents[] = [
-					'incidentid' => (int) ($start['incidentid'] ?? 0),
-					'triggerid' => $tid,
-					's' => (int) $start['clock'],
-					'e' => $clock,
-					'severity' => (int) $start['severity'],
-					'name' => (string) $start['name']
-				];
-				unset($pending[$tid]);
-			}
+		$triggerids = array_values(array_unique(array_map('intval', $triggerids)));
+		if (!$triggerids) {
+			return [];
 		}
 
-		foreach ($pending as $tid => $start) {
-			if (isset($exclude_triggerids[(int) $tid])) {
-				continue;
+		$incidents = [];
+		foreach (array_chunk($triggerids, 800) as $chunk) {
+			$events_window = API::Event()->get([
+				'output' => ['eventid', 'objectid', 'clock', 'value', 'severity', 'name'],
+				'source' => EVENT_SOURCE_TRIGGERS,
+				'object' => EVENT_OBJECT_TRIGGER,
+				'objectids' => $chunk,
+				'time_from' => $from_ts,
+				'time_till' => $to_ts,
+				'sortfield' => ['clock', 'eventid'],
+				'sortorder' => 'ASC',
+				'limit' => 100000,
+				'preservekeys' => false
+			]);
+
+			$events_before = API::Event()->get([
+				'output' => ['eventid', 'objectid', 'clock', 'value', 'severity', 'name'],
+				'source' => EVENT_SOURCE_TRIGGERS,
+				'object' => EVENT_OBJECT_TRIGGER,
+				'objectids' => $chunk,
+				'time_till' => $from_ts,
+				'sortfield' => ['clock', 'eventid'],
+				'sortorder' => 'DESC',
+				'limit' => 50000,
+				'preservekeys' => false
+			]);
+
+			$pending = [];
+			$seen_before = [];
+			foreach ($events_before as $event) {
+				$tid = (int) ($event['objectid'] ?? 0);
+				if ($tid <= 0 || isset($seen_before[$tid]) || isset($exclude_triggerids[$tid])) {
+					continue;
+				}
+				$seen_before[$tid] = true;
+				if ((int) ($event['value'] ?? 0) !== 1) {
+					continue;
+				}
+				$incidentid = (int) ($event['eventid'] ?? 0);
+				if ($incidentid > 0 && isset($exclude_incidentids[$incidentid])) {
+					continue;
+				}
+				$pending[$tid] = [
+					'incidentid' => $incidentid,
+					'clock' => $from_ts,
+					'severity' => (int) ($event['severity'] ?? 0),
+					'name' => (string) ($event['name'] ?? '')
+				];
 			}
-			$incidents[] = [
-				'incidentid' => (int) ($start['incidentid'] ?? 0),
-				'triggerid' => (int) $tid,
-				's' => (int) $start['clock'],
-				'e' => $to_ts,
-				'severity' => (int) ($start['severity'] ?? 0),
-				'name' => (string) ($start['name'] ?? '')
-			];
+
+			foreach ($events_window as $event) {
+				$tid = (int) ($event['objectid'] ?? 0);
+				if ($tid <= 0 || isset($exclude_triggerids[$tid])) {
+					continue;
+				}
+				$clock = (int) ($event['clock'] ?? 0);
+				$value = (int) ($event['value'] ?? 0);
+
+				if ($value === 1) {
+					if (!isset($pending[$tid])) {
+						$incidentid = (int) ($event['eventid'] ?? 0);
+						if ($incidentid > 0 && isset($exclude_incidentids[$incidentid])) {
+							continue;
+						}
+						$pending[$tid] = [
+							'incidentid' => $incidentid,
+							'clock' => $clock,
+							'severity' => (int) ($event['severity'] ?? 0),
+							'name' => (string) ($event['name'] ?? '')
+						];
+					}
+					continue;
+				}
+
+				if (isset($pending[$tid])) {
+					$start = $pending[$tid];
+					$incidents[] = [
+						'incidentid' => (int) ($start['incidentid'] ?? 0),
+						'triggerid' => $tid,
+						's' => (int) $start['clock'],
+						'e' => $clock,
+						'severity' => (int) ($start['severity'] ?? 0),
+						'name' => (string) ($start['name'] ?? '')
+					];
+					unset($pending[$tid]);
+				}
+			}
+
+			foreach ($pending as $tid => $start) {
+				if (isset($exclude_triggerids[(int) $tid])) {
+					continue;
+				}
+				$incidents[] = [
+					'incidentid' => (int) ($start['incidentid'] ?? 0),
+					'triggerid' => (int) $tid,
+					's' => (int) $start['clock'],
+					'e' => $to_ts,
+					'severity' => (int) ($start['severity'] ?? 0),
+					'name' => (string) ($start['name'] ?? '')
+				];
+			}
 		}
 
 		$clipped = [];

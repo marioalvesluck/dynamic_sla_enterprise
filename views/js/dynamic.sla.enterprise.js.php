@@ -22,6 +22,7 @@ jQuery(function() {
 	};
 	var activeSavedViewId = null;
 	var pendingOverwriteViewId = null;
+	var problemPagerState = { page: 1, limit: 25 };
 
 	function fmtDateInput(ts) {
 		var dt = new Date(ts * 1000);
@@ -931,7 +932,9 @@ jQuery(function() {
 			business_start: jQuery('#dse-business-start').val(),
 			business_end: jQuery('#dse-business-end').val(),
 			exclude_maintenance: jQuery('#dse-exclude-maintenance').is(':checked') ? '1' : '0',
-			slo_target: jQuery('#dse-slo-target').val()
+			slo_target: jQuery('#dse-slo-target').val(),
+			timeline_page: String(problemPagerState.page || 1),
+			timeline_limit: String(problemPagerState.limit || 25)
 		};
 	}
 
@@ -1430,13 +1433,18 @@ jQuery(function() {
 		if (!isFinite(total) || total < 0) {
 			total = rows.length;
 		}
+		var page = Math.max(1, Number(data.timeline_page || problemPagerState.page || 1));
+		var limit = Math.max(10, Number(data.timeline_limit || problemPagerState.limit || 25));
+		var pages = Math.max(1, Number(data.timeline_pages || Math.ceil(total / Math.max(1, limit)) || 1));
+		problemPagerState.page = page;
+		problemPagerState.limit = limit;
+
 		if (!rows.length) {
 			jQuery('#dse-timeline').html('<div class="mnz-dse-panel"><div class="mnz-dse-empty">' + (d.noDataLabel || 'No data') + '</div></div>');
 			return;
 		}
 
 		var tableId = 'dse-timeline-table';
-		getTablePagerState(tableId, 25);
 		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Problem</div>' +
 			'<div class="mnz-dse-table-tools"><input type="text" class="mnz-dse-table-filter" data-filter-target="#dse-timeline-table" placeholder="Filter table..."></div>' +
 			'<table class="list-table" id="dse-timeline-table"><thead><tr>' +
@@ -1476,15 +1484,16 @@ jQuery(function() {
 		});
 		html += '</tbody></table>' +
 			'<div class="mnz-dse-table-footer">' +
-				'<div class="mnz-dse-table-meta" data-table="' + tableId + '">Total loaded: ' + rows.length + ' | API total: ' + total + '</div>' +
+				'<div class="mnz-dse-table-meta">Total: ' + total + ' | Page ' + page + '/' + pages + ' | Showing: ' + rows.length + '</div>' +
 				'<div class="mnz-dse-table-pager">' +
-					'<label class="mnz-dse-limit-wrap">Limit <select class="mnz-dse-table-limit" data-table="' + tableId + '"><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option><option value="500">500</option></select></label>' +
-					'<button type="button" class="btn-alt mnz-dse-table-prev" data-table="' + tableId + '">&lt; Prev</button>' +
-					'<button type="button" class="btn-alt mnz-dse-table-next" data-table="' + tableId + '">Next &gt;</button>' +
+					'<label class="mnz-dse-limit-wrap">Limit <select class="mnz-dse-problem-limit"><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option><option value="500">500</option></select></label>' +
+					'<button type="button" class="btn-alt mnz-dse-problem-prev"' + (page <= 1 ? ' disabled' : '') + '>&lt; Prev</button>' +
+					'<button type="button" class="btn-alt mnz-dse-problem-next"' + (page >= pages ? ' disabled' : '') + '>Next &gt;</button>' +
 				'</div>' +
 			'</div>' +
 			'</div>';
 		jQuery('#dse-timeline').html(html);
+		jQuery('.mnz-dse-problem-limit').val(String(limit));
 		applyTableView(tableId);
 	}
 
@@ -1562,14 +1571,18 @@ jQuery(function() {
 		var cached = !forceFresh ? getCachedResponse(CACHE_KEYS.calc, payload, CACHE_TTL_CALC) : null;
 		if (isUsableCalcCache(cached)) {
 			lastCalculatedData = cached;
+			problemPagerState.page = Number(cached.timeline_page || problemPagerState.page || 1);
+			problemPagerState.limit = Number(cached.timeline_limit || problemPagerState.limit || 25);
 			renderExecutive(cached);
 			renderSummary(cached);
 			renderInsights(cached);
-			renderDaily(cached);
-			renderHeatmap(cached);
-			renderHostsImpact(cached);
-			renderTopTriggers(cached);
-			renderTimeline(cached);
+			setTimeout(function() {
+				renderDaily(cached);
+				renderHeatmap(cached);
+				renderHostsImpact(cached);
+				renderTopTriggers(cached);
+				renderTimeline(cached);
+			}, 0);
 			pushAudit('calc', { source: 'cache', window: String(cached.summary && cached.summary.window_label ? cached.summary.window_label : '') });
 			setStatus('SLA calculation loaded from cache', 'ok');
 			btn.prop('disabled', false).text(d.runLabel || 'Calculate SLA');
@@ -1587,15 +1600,19 @@ jQuery(function() {
 				return;
 			}
 			lastCalculatedData = res.data;
+			problemPagerState.page = Number(res.data.timeline_page || problemPagerState.page || 1);
+			problemPagerState.limit = Number(res.data.timeline_limit || problemPagerState.limit || 25);
 			setCachedResponse(CACHE_KEYS.calc, payload, res.data);
 			renderExecutive(res.data);
 			renderSummary(res.data);
 			renderInsights(res.data);
-			renderDaily(res.data);
-			renderHeatmap(res.data);
-			renderHostsImpact(res.data);
-			renderTopTriggers(res.data);
-			renderTimeline(res.data);
+			setTimeout(function() {
+				renderDaily(res.data);
+				renderHeatmap(res.data);
+				renderHostsImpact(res.data);
+				renderTopTriggers(res.data);
+				renderTimeline(res.data);
+			}, 0);
 			pushAudit('calc', { source: (res.data && res.data.cache && res.data.cache.hit) ? 'server-cache' : 'api', window: String(res.data.summary && res.data.summary.window_label ? res.data.summary.window_label : '') });
 			setStatus((res.data && res.data.note) ? res.data.note : 'SLA calculation finished', (res.data && res.data.note) ? 'error' : 'ok');
 		}).fail(function(jqXHR) {
@@ -1622,13 +1639,16 @@ jQuery(function() {
 	}
 
 	jQuery('#dse-period').on('change', function() {
+		problemPagerState.page = 1;
 		applyPeriodPreset();
 		loadOptions('period');
 	});
 	jQuery('#dse-from,#dse-to').on('change', function() {
+		problemPagerState.page = 1;
 		loadOptions('period');
 	});
 	jQuery('#dse-groupids').on('change', function() {
+		problemPagerState.page = 1;
 		if (!hasSelectedGroups()) {
 			setResultsCollapsed(true);
 			clearDependentSelectors();
@@ -1640,12 +1660,15 @@ jQuery(function() {
 		loadOptions('groups');
 	});
 	jQuery('#dse-hostids').on('change', function() {
+		problemPagerState.page = 1;
 		loadOptions('hosts');
 	});
 	jQuery('#dse-severity').on('change', function() {
+		problemPagerState.page = 1;
 		loadOptions('severity');
 	});
 	jQuery('#dse-impact-level').on('change', function() {
+		problemPagerState.page = 1;
 		loadOptions('impact');
 	});
 	jQuery('#dse-refresh-options').on('click', function(e) {
@@ -1655,6 +1678,7 @@ jQuery(function() {
 	});
 	jQuery('#dse-run').on('click', function(e) {
 		e.preventDefault();
+		problemPagerState.page = 1;
 		run();
 	});
 	jQuery('#dse-generate-report').on('click', function(e) {
@@ -1663,7 +1687,7 @@ jQuery(function() {
 	});
 	jQuery('#dse-quick-print').on('click', function(e) {
 		e.preventDefault();
-		openReport(true);
+		window.print();
 	});
 	jQuery('#dse-clear-cache').on('click', function(e) {
 		e.preventDefault();
@@ -1727,6 +1751,19 @@ jQuery(function() {
 		if (pendingOverwriteViewId !== null) {
 			resetSaveDialogState();
 		}
+	});
+	jQuery(document).on('change', '.mnz-dse-problem-limit', function() {
+		problemPagerState.limit = Math.max(10, Number(jQuery(this).val() || 25));
+		problemPagerState.page = 1;
+		run(true);
+	});
+	jQuery(document).on('click', '.mnz-dse-problem-prev', function() {
+		problemPagerState.page = Math.max(1, Number(problemPagerState.page || 1) - 1);
+		run(true);
+	});
+	jQuery(document).on('click', '.mnz-dse-problem-next', function() {
+		problemPagerState.page = Math.max(1, Number(problemPagerState.page || 1) + 1);
+		run(true);
 	});
 	jQuery('#dse-save-overlay').on('click', function(e) {
 		if (e.target === this) {
