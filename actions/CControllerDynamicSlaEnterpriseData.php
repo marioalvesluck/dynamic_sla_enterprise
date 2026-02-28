@@ -322,14 +322,18 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				continue;
 			}
 			$effective = 0;
+			$effective_start = null;
+			$effective_end = null;
 			foreach ($overlaps as $ov) {
 				$downtime_intervals[] = $ov;
 				$effective += ($ov['e'] - $ov['s']);
+				$effective_start = $effective_start === null ? (int) $ov['s'] : min($effective_start, (int) $ov['s']);
+				$effective_end = $effective_end === null ? (int) $ov['e'] : max($effective_end, (int) $ov['e']);
 			}
 
 			$tid = (int) $incident['triggerid'];
 			$per_trigger_downtime[$tid] = ($per_trigger_downtime[$tid] ?? 0) + $effective;
-			$start_ts = (int) $incident['s'];
+			$start_ts = (int) ($effective_start ?? $incident['s']);
 			if (!isset($per_trigger_last_start[$tid]) || $start_ts > $per_trigger_last_start[$tid]) {
 				$per_trigger_last_start[$tid] = $start_ts;
 			}
@@ -342,6 +346,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'severity_label' => $this->severityName((int) ($trigger_map[$tid]['severity'] ?? $incident['severity'] ?? 0)),
 				'start' => (int) $incident['s'],
 				'end' => (int) $incident['e'],
+				'effective_start' => (int) ($effective_start ?? $incident['s']),
+				'effective_end' => (int) ($effective_end ?? $incident['e']),
 				'status' => $incident['e'] >= $to_ts ? 'PROBLEM' : 'RESOLVED',
 				'duration_seconds' => (int) max(0, $effective),
 				'duration' => $this->fmtDuration((int) $effective)
@@ -351,6 +357,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		$downtime_intervals = $this->mergeIntervals($downtime_intervals);
 		$total_window = max(1, $this->sumIntervals($denominator_intervals));
 		$total_downtime = $this->sumIntervals($downtime_intervals);
+		// Sum of incident downtime (can exceed window when incidents overlap).
+		$total_downtime_sum = (int) array_sum($per_trigger_downtime);
 		$total_uptime = max(0, $total_window - $total_downtime);
 		$availability = ($total_uptime / $total_window) * 100;
 		$gap = $availability - $slo_target;
@@ -398,8 +406,10 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'availability' => round($availability, 4),
 				'slo_target' => $slo_target,
 				'slo_gap' => round($gap, 4),
-				'downtime_seconds' => (int) $total_downtime,
-				'downtime' => $this->fmtDuration((int) $total_downtime),
+				'downtime_seconds' => (int) $total_downtime_sum,
+				'downtime' => $this->fmtDuration((int) $total_downtime_sum),
+				'downtime_union_seconds' => (int) $total_downtime,
+				'downtime_union' => $this->fmtDuration((int) $total_downtime),
 				'uptime' => $this->fmtDuration((int) $total_uptime),
 				'mttr' => $this->fmtDuration($mttr_seconds),
 				'risk' => $risk
@@ -418,7 +428,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'executive' => [
 				'current_incident_risk' => $risk,
 				'sla_achieved' => round($availability, 3),
-				'downtime_window' => $this->fmtDuration((int) $total_downtime),
+				'downtime_window' => $this->fmtDuration((int) $total_downtime_sum),
 				'incidents_this_window' => count($timeline_rows),
 				'services_impacted' => count($top_triggers)
 			],
@@ -827,6 +837,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'slo_gap' => round(100.0 - $slo_target, 4),
 				'downtime_seconds' => 0,
 				'downtime' => $this->fmtDuration(0),
+				'downtime_union_seconds' => 0,
+				'downtime_union' => $this->fmtDuration(0),
 				'uptime' => $this->fmtDuration($den),
 				'mttr' => $this->fmtDuration(0),
 				'risk' => 'Low'

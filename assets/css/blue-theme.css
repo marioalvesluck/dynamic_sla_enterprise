@@ -24,6 +24,18 @@
 	margin-bottom: 10px;
 }
 
+.mnz-dse-panel-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 10px;
+}
+
+.mnz-dse-panel-head .mnz-dse-section-title {
+	margin-bottom: 0;
+}
+
 .mnz-dse-filters {
 	display: grid;
 	grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -254,6 +266,65 @@
 	background: #fff;
 }
 
+.mnz-dse-insights-list {
+	display: grid;
+	gap: 6px;
+	margin-bottom: 10px;
+	font-size: 13px;
+	color: #334155;
+}
+
+.mnz-dse-insights-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.mnz-dse-insight-card {
+	padding: 10px;
+	border-radius: 8px;
+	border: 1px solid rgba(0, 0, 0, 0.1);
+	background: #fff;
+}
+
+.mnz-dse-v2 {
+	margin-top: 6px;
+	font-size: 18px;
+	font-weight: 700;
+	color: #1f2937;
+}
+
+.mnz-dse-mini-bars {
+	margin-top: 8px;
+	display: flex;
+	align-items: flex-end;
+	gap: 2px;
+	height: 30px;
+}
+
+.mnz-dse-mini-bar {
+	width: 8px;
+	border-radius: 2px 2px 0 0;
+	background: #0ea5e9;
+	display: inline-block;
+}
+
+.mnz-dse-mode-switch {
+	display: inline-flex;
+	gap: 6px;
+}
+
+.mnz-dse-mode-btn {
+	font-size: 12px;
+	padding: 2px 8px;
+}
+
+.mnz-dse-mode-btn.is-active {
+	background: #0284c7;
+	border-color: #0284c7;
+	color: #fff;
+}
+
 .mnz-dse-k {
 	font-size: 11px;
 	text-transform: uppercase;
@@ -433,6 +504,9 @@
 	.mnz-dse-cards,
 	.mnz-dse-cards-exec {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+	.mnz-dse-insights-grid {
+		grid-template-columns: 1fr;
 	}
 }
 

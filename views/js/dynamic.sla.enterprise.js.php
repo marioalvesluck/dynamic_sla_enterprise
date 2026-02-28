@@ -8,6 +8,8 @@ jQuery(function() {
 
 	var d = window.mnzDseData || {};
 	delete window.mnzDseData;
+	var incidentMode = 'starts';
+	var lastCalculatedData = null;
 
 	function fmtDateInput(ts) {
 		var dt = new Date(ts * 1000);
@@ -24,7 +26,7 @@ jQuery(function() {
 		if (!isFinite(n)) {
 			return '-';
 		}
-		return n.toFixed(3) + '%';
+		return n.toFixed(2) + '%';
 	}
 
 	function fmtDownShort(seconds) {
@@ -60,7 +62,7 @@ jQuery(function() {
 	}
 
 	function setResultsCollapsed(collapsed) {
-		var ids = ['#dse-exec', '#dse-summary', '#dse-daily', '#dse-heatmap', '#dse-top-triggers', '#dse-timeline'];
+		var ids = ['#dse-exec', '#dse-summary', '#dse-insights', '#dse-daily', '#dse-heatmap', '#dse-top-triggers', '#dse-timeline'];
 		ids.forEach(function(id) {
 			if (collapsed) {
 				jQuery(id).hide().empty();
@@ -156,6 +158,38 @@ jQuery(function() {
 			}
 			bucket = bucketEnd;
 		}
+	}
+
+	function forEachBucketByMode(startTs, endTs, windowStart, windowEnd, mode, cb) {
+		var s = Number(startTs || 0);
+		var e = Number(endTs || 0);
+		var ws = Number(windowStart || 0);
+		var we = Number(windowEnd || 0);
+		if (!isFinite(s) || !isFinite(ws) || !isFinite(we)) {
+			return;
+		}
+
+		if (mode === 'starts') {
+			if (s < ws || s > we) {
+				return;
+			}
+			cb(Math.floor(s / 3600) * 3600);
+			return;
+		}
+
+		if (!isFinite(e) || e <= 0) {
+			e = we;
+		}
+		forEachOverlappedHour(s, e, ws, we, cb);
+	}
+
+	function renderModeSwitch() {
+		var startsActive = incidentMode === 'starts' ? ' is-active' : '';
+		var durationActive = incidentMode === 'active' ? ' is-active' : '';
+		return '<div class="mnz-dse-mode-switch">' +
+			'<button type="button" class="btn-alt mnz-dse-mode-btn' + startsActive + '" data-mode="starts">Starts only</button>' +
+			'<button type="button" class="btn-alt mnz-dse-mode-btn' + durationActive + '" data-mode="active">Active duration</button>' +
+		'</div>';
 	}
 
 	function escapeHtml(v) {
@@ -517,12 +551,116 @@ jQuery(function() {
 		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Dynamic SLA Intelligence</div><div class="mnz-dse-cards">' +
 			'<div class="mnz-dse-card"><div class="mnz-dse-k">Availability</div><div class="mnz-dse-v">' + fmtPct(s.availability) + '</div></div>' +
 			'<div class="mnz-dse-card"><div class="mnz-dse-k">SLO Target</div><div class="mnz-dse-v">' + fmtPct(s.slo_target) + '</div></div>' +
-			'<div class="mnz-dse-card"><div class="mnz-dse-k">Gap</div><div class="mnz-dse-v ' + gapClass + '">' + (gap >= 0 ? '+' : '') + (isNaN(gap) ? '-' : gap.toFixed(3) + '%') + '</div></div>' +
+			'<div class="mnz-dse-card"><div class="mnz-dse-k">Gap</div><div class="mnz-dse-v ' + gapClass + '">' + (gap >= 0 ? '+' : '') + (isNaN(gap) ? '-' : gap.toFixed(2) + '%') + '</div></div>' +
 			'<div class="mnz-dse-card"><div class="mnz-dse-k">Downtime</div><div class="mnz-dse-v">' + (s.downtime || '-') + '</div></div>' +
 			'<div class="mnz-dse-card"><div class="mnz-dse-k">Uptime</div><div class="mnz-dse-v">' + (s.uptime || '-') + '</div></div>' +
 			'<div class="mnz-dse-card"><div class="mnz-dse-k">MTTR</div><div class="mnz-dse-v">' + (s.mttr || '-') + '</div></div>' +
 			'</div></div>';
 		jQuery('#dse-summary').html(html);
+	}
+
+	function renderInsights(data) {
+		var rows = Array.isArray(data.timeline) ? data.timeline : [];
+		if (!rows.length) {
+			jQuery('#dse-insights').html('<div class="mnz-dse-panel"><div class="mnz-dse-empty">No insights for current filter.</div></div>');
+			return;
+		}
+
+		var weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+		var bucketCount = {};
+		var inBusiness = 0;
+		var outBusiness = 0;
+		var sevDur = {};
+		var nowTs = Math.floor(Date.now() / 1000);
+		var last14 = nowTs - (14 * 86400);
+		var dayBins = {};
+
+		rows.forEach(function(row) {
+			var start = Number(row.effective_start || row.start || 0);
+			var end = Number(row.effective_end || row.end || 0);
+			if (!isFinite(start) || start <= 0) {
+				return;
+			}
+			if (!isFinite(end) || end <= 0) {
+				end = nowTs;
+			}
+			var dt = new Date(start * 1000);
+			var key = weekday[dt.getDay()] + ' ' + String(dt.getHours()).padStart(2, '0') + 'h';
+			bucketCount[key] = (bucketCount[key] || 0) + 1;
+
+			var isBusinessDay = dt.getDay() >= 1 && dt.getDay() <= 5;
+			var hour = dt.getHours();
+			var isBusinessHour = hour >= 8 && hour < 18;
+			if (isBusinessDay && isBusinessHour) {
+				inBusiness++;
+			}
+			else {
+				outBusiness++;
+			}
+
+			var sev = String(row.severity_label || 'Unknown');
+			var dur = Math.max(0, (Number(row.end || 0) || nowTs) - start);
+			if (!sevDur[sev]) {
+				sevDur[sev] = { total: 0, count: 0 };
+			}
+			sevDur[sev].total += dur;
+			sevDur[sev].count += 1;
+
+			if (start >= last14) {
+				var dayKey = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+				dayBins[dayKey] = (dayBins[dayKey] || 0) + 1;
+			}
+		});
+
+		var bestPattern = '-';
+		var bestCount = 0;
+		Object.keys(bucketCount).forEach(function(k) {
+			if (bucketCount[k] > bestCount) {
+				bestCount = bucketCount[k];
+				bestPattern = k;
+			}
+		});
+
+		var worstSev = '-';
+		var worstMttr = 0;
+		Object.keys(sevDur).forEach(function(sev) {
+			var avg = sevDur[sev].total / Math.max(1, sevDur[sev].count);
+			if (avg > worstMttr) {
+				worstMttr = avg;
+				worstSev = sev;
+			}
+		});
+
+		var totalMix = inBusiness + outBusiness;
+		var inPct = totalMix > 0 ? (inBusiness / totalMix) * 100 : 0;
+		var outPct = totalMix > 0 ? (outBusiness / totalMix) * 100 : 0;
+
+		var last14Values = Object.keys(dayBins).sort().slice(-14).map(function(k) { return dayBins[k]; });
+		var burnRate = last14Values.length ? (last14Values.reduce(function(a, b) { return a + b; }, 0) / last14Values.length) : 0;
+		var burnRisk = burnRate >= 3 ? 'high' : (burnRate >= 1 ? 'medium' : 'low');
+
+		var bars = '<div class="mnz-dse-mini-bars">';
+		for (var i = 0; i < Math.max(14, last14Values.length); i++) {
+			var v = last14Values[i] || 0;
+			var h = last14Values.length ? Math.max(2, (v / Math.max.apply(null, last14Values.concat([1]))) * 28) : 2;
+			bars += '<span class="mnz-dse-mini-bar" style="height:' + h + 'px" title="' + v + ' incidents"></span>';
+		}
+		bars += '</div>';
+
+		var html = '<div class="mnz-dse-panel">' +
+			'<div class="mnz-dse-section-title">Insights Inteligentes</div>' +
+			'<div class="mnz-dse-insights-list">' +
+				'<div><b>Padrao detectado:</b> ' + escapeHtml(bestPattern) + ' (' + bestCount + ' incidents)</div>' +
+				'<div><b>Tendencia:</b> modo <code>' + escapeHtml(incidentMode) + '</code> aplicado nos graficos.</div>' +
+				'<div><b>Recomendacao:</b> ' + (outPct > 60 ? 'avaliar janela de suporte fora do horario comercial.' : 'manter monitoracao atual e revisar picos.') + '</div>' +
+			'</div>' +
+			'<div class="mnz-dse-insights-grid">' +
+				'<div class="mnz-dse-insight-card"><div class="mnz-dse-k">Horario comercial vs fora</div><div class="mnz-dse-v2">' + inPct.toFixed(2) + '% / ' + outPct.toFixed(2) + '%</div></div>' +
+				'<div class="mnz-dse-insight-card"><div class="mnz-dse-k">MTTR por severidade (pior)</div><div class="mnz-dse-v2">' + escapeHtml(worstSev) + ' - ' + fmtDownShort(worstMttr) + '</div></div>' +
+				'<div class="mnz-dse-insight-card"><div class="mnz-dse-k">SLO burn rate (14d)</div><div class="mnz-dse-v2">' + burnRate.toFixed(2) + '/dia (' + burnRisk + ')</div>' + bars + '</div>' +
+			'</div>' +
+		'</div>';
+		jQuery('#dse-insights').html(html);
 	}
 
 	function renderDaily(data) {
@@ -540,12 +678,12 @@ jQuery(function() {
 		}
 
 		rows.forEach(function(row) {
-			var start = Number(row.start || 0);
-			var end = Number(row.end || 0);
+			var start = Number(row.effective_start || row.start || 0);
+			var end = Number(row.effective_end || row.end || 0);
 			if (!isFinite(end) || end <= 0) {
 				end = toTs;
 			}
-			forEachOverlappedHour(start, end, fromTs, toTs, function(bucketTs) {
+			forEachBucketByMode(start, end, fromTs, toTs, incidentMode, function(bucketTs) {
 				var idx = Math.floor((bucketTs - fromTs) / 3600);
 				idx = Math.max(0, Math.min(23, idx));
 				counts[idx] += 1;
@@ -580,7 +718,7 @@ jQuery(function() {
 			'</div>';
 		}
 		bars += '</div>';
-		jQuery('#dse-daily').html('<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Daily distribution (last 24h active incidents)</div>' + bars + '</div>');
+		jQuery('#dse-daily').html('<div class="mnz-dse-panel"><div class="mnz-dse-panel-head"><div class="mnz-dse-section-title">Daily distribution (last 24h incidents)</div>' + renderModeSwitch() + '</div>' + bars + '</div>');
 	}
 
 	function renderHeatmap(data) {
@@ -617,7 +755,7 @@ jQuery(function() {
 			if (!isFinite(end) || end <= 0) {
 				end = toTs;
 			}
-			forEachOverlappedHour(start, end, fromTs, toTs, function(bucketTs) {
+			forEachBucketByMode(start, end, fromTs, toTs, incidentMode, function(bucketTs) {
 				var dt = new Date(bucketTs * 1000);
 				var wday = dt.getDay();
 				var hour = dt.getHours();
@@ -626,7 +764,7 @@ jQuery(function() {
 			});
 		});
 
-		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Incident heatmap (day x hour)</div><div class="mnz-dse-heatmap-grid">';
+		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-panel-head"><div class="mnz-dse-section-title">Incident heatmap (day x hour)</div>' + renderModeSwitch() + '</div><div class="mnz-dse-heatmap-grid">';
 		html += '<div class="mnz-dse-heatmap-row mnz-dse-heatmap-head"><div class="mnz-dse-heatmap-corner"></div>';
 		hourLabels.forEach(function(lbl) {
 			html += '<div class="mnz-dse-heatmap-h">' + String(lbl).replace(/</g, '&lt;') + '</div>';
@@ -756,8 +894,10 @@ jQuery(function() {
 				setStatus((res && res.error && res.error.message) ? res.error.message : (d.failedLabel || 'Failed to calculate SLA'), 'error');
 				return;
 			}
+			lastCalculatedData = res.data;
 			renderExecutive(res.data);
 			renderSummary(res.data);
+			renderInsights(res.data);
 			renderDaily(res.data);
 			renderHeatmap(res.data);
 			renderTopTriggers(res.data);
@@ -805,6 +945,19 @@ jQuery(function() {
 	jQuery(document).on('click', '.mnz-dse-exclude-btn', function() {
 		appendExcludedTrigger(jQuery(this).data('triggerid'));
 		run();
+	});
+	jQuery(document).on('click', '.mnz-dse-mode-btn', function(e) {
+		e.preventDefault();
+		var mode = String(jQuery(this).data('mode') || 'active');
+		if (mode !== 'active' && mode !== 'starts') {
+			mode = 'active';
+		}
+		incidentMode = mode;
+		if (lastCalculatedData) {
+			renderInsights(lastCalculatedData);
+			renderDaily(lastCalculatedData);
+			renderHeatmap(lastCalculatedData);
+		}
 	});
 	jQuery(document).on('click', function() {
 		jQuery('.mnz-dse-ms').removeClass('is-open');

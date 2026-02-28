@@ -1,15 +1,19 @@
 [theme="dark-theme"] .mnz-dse-panel,
 [theme="dark-theme"] .mnz-dse-card,
+[theme="dark-theme"] .mnz-dse-insight-card,
 [theme="hc-dark"] .mnz-dse-panel,
-[theme="hc-dark"] .mnz-dse-card {
+[theme="hc-dark"] .mnz-dse-card,
+[theme="hc-dark"] .mnz-dse-insight-card {
 	background: #2b2b2b;
 	border-color: rgba(255, 255, 255, 0.14);
 }
 
 [theme="dark-theme"] .mnz-dse-title,
 [theme="dark-theme"] .mnz-dse-v,
+[theme="dark-theme"] .mnz-dse-v2,
 [theme="hc-dark"] .mnz-dse-title,
-[theme="hc-dark"] .mnz-dse-v {
+[theme="hc-dark"] .mnz-dse-v,
+[theme="hc-dark"] .mnz-dse-v2 {
 	color: #e5e7eb;
 }
 
@@ -18,6 +22,7 @@
 [theme="dark-theme"] .mnz-dse-section-title,
 [theme="dark-theme"] .mnz-dse-bar-val,
 [theme="dark-theme"] .mnz-dse-bar-lbl,
+[theme="dark-theme"] .mnz-dse-insights-list,
 [theme="dark-theme"] .mnz-dse-table-meta,
 [theme="dark-theme"] .mnz-dse-empty,
 [theme="hc-dark"] .mnz-dse-label,
@@ -25,6 +30,7 @@
 [theme="hc-dark"] .mnz-dse-section-title,
 [theme="hc-dark"] .mnz-dse-bar-val,
 [theme="hc-dark"] .mnz-dse-bar-lbl,
+[theme="hc-dark"] .mnz-dse-insights-list,
 [theme="hc-dark"] .mnz-dse-table-meta,
 [theme="hc-dark"] .mnz-dse-empty {
 	color: #9ca3af;
@@ -84,6 +90,20 @@
 	background: #1f2937;
 	border-color: rgba(255, 255, 255, 0.2);
 	color: #e5e7eb;
+}
+
+[theme="dark-theme"] .mnz-dse-mode-btn,
+[theme="hc-dark"] .mnz-dse-mode-btn {
+	background: #1f2937;
+	border-color: rgba(255, 255, 255, 0.2);
+	color: #e5e7eb;
+}
+
+[theme="dark-theme"] .mnz-dse-mode-btn.is-active,
+[theme="hc-dark"] .mnz-dse-mode-btn.is-active {
+	background: #0284c7;
+	border-color: #0284c7;
+	color: #fff;
 }
 
 [theme="dark-theme"] .mnz-dse-gap-good,
