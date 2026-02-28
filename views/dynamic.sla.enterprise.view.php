@@ -50,6 +50,20 @@ $filters = (new CDiv([
 			->addClass('mnz-dse-input')
 	]))->addClass('mnz-dse-field'),
 	(new CDiv([
+		(new CLabel(_('Impact range'), 'dse-impact-level'))->addClass('mnz-dse-label'),
+		(new CSelect('impact_level'))
+			->setId('dse-impact-level')
+			->addOptions([
+				new CSelectOption('all', _('All')),
+				new CSelectOption('low', _('Low')),
+				new CSelectOption('medium', _('Medium')),
+				new CSelectOption('high', _('High')),
+				new CSelectOption('critical', _('Critical'))
+			])
+			->setValue('all')
+			->addClass('mnz-dse-input')
+	]))->addClass('mnz-dse-field'),
+	(new CDiv([
 		(new CLabel(_('Period'), 'dse-period'))->addClass('mnz-dse-label'),
 		(new CSelect('period'))
 			->setId('dse-period')

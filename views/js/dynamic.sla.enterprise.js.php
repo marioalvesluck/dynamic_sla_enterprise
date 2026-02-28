@@ -113,6 +113,23 @@ jQuery(function() {
 		return 'mnz-dse-sev-' + sev;
 	}
 
+	function impactBand(score) {
+		var n = Number(score || 0);
+		if (!isFinite(n)) {
+			n = 0;
+		}
+		if (n >= 31) {
+			return 'critical';
+		}
+		if (n >= 21) {
+			return 'high';
+		}
+		if (n >= 11) {
+			return 'medium';
+		}
+		return 'low';
+	}
+
 	function incidentTooltipLines(label, incidents) {
 		if (!incidents || !incidents.length) {
 			return label + '\nIncidents: 0';
@@ -198,6 +215,14 @@ jQuery(function() {
 			.replace(/</g, '&lt;')
 			.replace(/>/g, '&gt;')
 			.replace(/"/g, '&quot;');
+	}
+
+	function applyTableFilter($table, query) {
+		var q = String(query || '').toLowerCase().trim();
+		$table.find('tbody tr').each(function() {
+			var txt = String(jQuery(this).text() || '').toLowerCase();
+			jQuery(this).toggle(!q || txt.indexOf(q) >= 0);
+		});
 	}
 
 	function updateMsToggle(select) {
@@ -423,6 +448,7 @@ jQuery(function() {
 			severity: severity.severity,
 			severity_explicit: severity.severity_explicit,
 			exclude_triggerids: jQuery('#dse-exclude-triggerids').val(),
+			impact_level: jQuery('#dse-impact-level').val(),
 			business_mode: jQuery('#dse-business-mode').val(),
 			business_start: jQuery('#dse-business-start').val(),
 			business_end: jQuery('#dse-business-end').val(),
@@ -475,7 +501,7 @@ jQuery(function() {
 			payload.hostids = '';
 			payload.triggerids = '';
 		}
-		else if (triggeredBy === 'hosts' || triggeredBy === 'severity' || triggeredBy === 'period') {
+		else if (triggeredBy === 'hosts' || triggeredBy === 'severity' || triggeredBy === 'period' || triggeredBy === 'impact') {
 			payload.triggerids = '';
 		}
 
@@ -539,6 +565,7 @@ jQuery(function() {
 					'<div class="mnz-dse-card"><div class="mnz-dse-k">Downtime (Window)</div><div class="mnz-dse-v">' + (ex.downtime_window || '-') + '</div></div>' +
 					'<div class="mnz-dse-card"><div class="mnz-dse-k">Incidents in Window</div><div class="mnz-dse-v">' + Number(ex.incidents_this_window || 0) + '</div></div>' +
 					'<div class="mnz-dse-card"><div class="mnz-dse-k">Triggers Impacted</div><div class="mnz-dse-v">' + Number(ex.services_impacted || 0) + '</div></div>' +
+					'<div class="mnz-dse-card"><div class="mnz-dse-k">Total impact (window)</div><div class="mnz-dse-v mnz-dse-impact-' + impactBand(ex.total_impact_window) + '">' + Number(ex.total_impact_window || 0) + '</div></div>' +
 				'</div>' +
 			'</div>';
 		jQuery('#dse-exec').html(html);
@@ -814,19 +841,37 @@ jQuery(function() {
 			}
 		});
 
-		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Top triggers by downtime</div><table class="list-table"><thead><tr><th>Trigger ID</th><th>Host</th><th>Name</th><th>Start time</th><th>Severity</th><th>Impact</th><th>Downtime</th><th>Action</th></tr></thead><tbody>';
+		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Top triggers by downtime</div>' +
+			'<div class="mnz-dse-table-tools"><input type="text" class="mnz-dse-table-filter" data-filter-target="#dse-top-triggers-table" placeholder="Filter table..."></div>' +
+			'<table class="list-table" id="dse-top-triggers-table"><thead><tr>' +
+			'<th class="mnz-dse-sortable" data-key="triggerid" data-type="num">Trigger ID</th>' +
+			'<th class="mnz-dse-sortable" data-key="host" data-type="text">Host</th>' +
+			'<th class="mnz-dse-sortable" data-key="name" data-type="text">Name</th>' +
+			'<th class="mnz-dse-sortable" data-key="startts" data-type="num">Start time</th>' +
+			'<th class="mnz-dse-sortable" data-key="severity" data-type="num">Severity</th>' +
+			'<th class="mnz-dse-sortable" data-key="impact" data-type="num">Impact</th>' +
+			'<th class="mnz-dse-sortable" data-key="downtime" data-type="num">Downtime</th>' +
+			'<th>Action</th>' +
+			'</tr></thead><tbody>';
 		rows.forEach(function(row) {
 			var start = row.start ? new Date(row.start * 1000).toLocaleString() : '-';
 			var impact = Number(row.impact || 0);
 			var pct = Math.max(4, Math.min(100, Math.round((impact / Math.max(1, maxImpact)) * 100)));
 			var impactTip = String(row.impact_formula || '').replace(/"/g, '&quot;');
-			html += '<tr>' +
+			var band = impactBand(impact);
+			html += '<tr data-triggerid="' + Number(row.triggerid || 0) + '"' +
+				' data-host="' + escapeHtml(String(row.host || '-').toLowerCase()) + '"' +
+				' data-name="' + escapeHtml(String(row.name || '').toLowerCase()) + '"' +
+				' data-startts="' + Number(row.start || 0) + '"' +
+				' data-severity="' + Number(row.severity || 0) + '"' +
+				' data-impact="' + Number(row.impact || 0) + '"' +
+				' data-downtime="' + Number(row.downtime_seconds || 0) + '">' +
 				'<td>' + row.triggerid + '</td>' +
 				'<td>' + String(row.host || '-').replace(/</g, '&lt;') + '</td>' +
 				'<td>' + String(row.name || '').replace(/</g, '&lt;') + '</td>' +
 				'<td>' + start + '</td>' +
 				'<td><span class="mnz-dse-sev ' + severityBadgeClass(row.severity) + '">' + String(row.severity_label || '-').replace(/</g, '&lt;') + '</span></td>' +
-				'<td><div class="mnz-dse-impact-wrap" title="' + impactTip + '"><span class="mnz-dse-impact-val">' + Math.round(impact) + '</span><span class="mnz-dse-impact-bar"><span class="mnz-dse-impact-fill" style="width:' + pct + '%"></span></span></div></td>' +
+				'<td><div class="mnz-dse-impact-wrap" title="' + impactTip + '"><span class="mnz-dse-impact-badge mnz-dse-impact-' + band + '">' + band + '</span><span class="mnz-dse-impact-val">' + Math.round(impact) + '</span><span class="mnz-dse-impact-bar"><span class="mnz-dse-impact-fill mnz-dse-impact-fill-' + band + '" style="width:' + pct + '%"></span></span></div></td>' +
 				'<td>' + String(row.downtime || '-') + '</td>' +
 				'<td><button type="button" class="btn-alt mnz-dse-exclude-btn" data-triggerid="' + row.triggerid + '">Exclude</button></td>' +
 			'</tr>';
@@ -851,11 +896,12 @@ jQuery(function() {
 		rows.forEach(function(row) {
 			var impact = Number(row.impact || 0);
 			var pct = Math.max(2, Math.round((impact / Math.max(1, maxImpact)) * 100));
+			var band = String(row.impact_level || impactBand(Number(row.impact_avg || impact)));
 			var tip = 'Impact: ' + Math.round(impact) + ' | Triggers: ' + Number(row.triggers || 0) + ' | Downtime: ' + fmtDownShort(Number(row.downtime_seconds || 0));
 			html += '<div class="mnz-dse-hostimpact-row" title="' + tip.replace(/"/g, '&quot;') + '">' +
 				'<span class="mnz-dse-hostimpact-name">' + String(row.host || '-').replace(/</g, '&lt;') + '</span>' +
-				'<span class="mnz-dse-hostimpact-bar"><span class="mnz-dse-hostimpact-fill" style="width:' + pct + '%"></span></span>' +
-				'<span class="mnz-dse-hostimpact-val">' + Math.round(impact) + '</span>' +
+				'<span class="mnz-dse-hostimpact-bar"><span class="mnz-dse-hostimpact-fill mnz-dse-impact-fill-' + band + '" style="width:' + pct + '%"></span></span>' +
+				'<span class="mnz-dse-hostimpact-val"><span class="mnz-dse-impact-badge mnz-dse-impact-' + band + '">' + band + '</span> ' + Math.round(impact) + '</span>' +
 			'</div>';
 		});
 		html += '</div></div>';
@@ -873,12 +919,28 @@ jQuery(function() {
 			return;
 		}
 
-		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Timeline</div><table class="list-table"><thead><tr><th>Start time</th><th>Recovery time</th><th>Status</th><th>Severity</th><th>Host</th><th>Trigger</th><th>Duration</th></tr></thead><tbody>';
+		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Timeline</div>' +
+			'<div class="mnz-dse-table-tools"><input type="text" class="mnz-dse-table-filter" data-filter-target="#dse-timeline-table" placeholder="Filter table..."></div>' +
+			'<table class="list-table" id="dse-timeline-table"><thead><tr>' +
+			'<th class="mnz-dse-sortable" data-key="startts" data-type="num">Start time</th>' +
+			'<th class="mnz-dse-sortable" data-key="endts" data-type="num">Recovery time</th>' +
+			'<th class="mnz-dse-sortable" data-key="status" data-type="text">Status</th>' +
+			'<th class="mnz-dse-sortable" data-key="severity" data-type="num">Severity</th>' +
+			'<th class="mnz-dse-sortable" data-key="host" data-type="text">Host</th>' +
+			'<th class="mnz-dse-sortable" data-key="trigger" data-type="text">Trigger</th>' +
+			'<th class="mnz-dse-sortable" data-key="duration" data-type="num">Duration</th>' +
+			'</tr></thead><tbody>';
 		rows.forEach(function(row) {
 			var start = row.start ? new Date(row.start * 1000).toLocaleString() : '-';
 			var end = row.end ? new Date(row.end * 1000).toLocaleString() : '-';
 			var statusCls = row.status === 'PROBLEM' ? 'mnz-dse-status-bad' : 'mnz-dse-status-good';
-			html += '<tr>' +
+			html += '<tr data-startts="' + Number(row.start || 0) + '"' +
+				' data-endts="' + Number(row.end || 0) + '"' +
+				' data-status="' + escapeHtml(String(row.status || '-').toLowerCase()) + '"' +
+				' data-severity="' + Number(row.severity || 0) + '"' +
+				' data-host="' + escapeHtml(String(row.host || '-').toLowerCase()) + '"' +
+				' data-trigger="' + escapeHtml(String(row.trigger_name || '-').toLowerCase()) + '"' +
+				' data-duration="' + Number(row.duration_seconds || 0) + '">' +
 				'<td>' + start + '</td>' +
 				'<td>' + end + '</td>' +
 				'<td><span class="' + statusCls + '">' + String(row.status || '-') + '</span></td>' +
@@ -974,6 +1036,9 @@ jQuery(function() {
 	jQuery('#dse-severity').on('change', function() {
 		loadOptions('severity');
 	});
+	jQuery('#dse-impact-level').on('change', function() {
+		loadOptions('impact');
+	});
 	jQuery('#dse-refresh-options').on('click', function(e) {
 		e.preventDefault();
 		loadOptions('manual');
@@ -997,6 +1062,64 @@ jQuery(function() {
 			renderInsights(lastCalculatedData);
 			renderDaily(lastCalculatedData);
 			renderHeatmap(lastCalculatedData);
+		}
+	});
+	jQuery(document).on('input', '.mnz-dse-table-filter', function() {
+		var target = String(jQuery(this).data('filter-target') || '');
+		if (!target) {
+			return;
+		}
+		var $table = jQuery(target);
+		if (!$table.length) {
+			return;
+		}
+		applyTableFilter($table, jQuery(this).val());
+	});
+	jQuery(document).on('click', '.mnz-dse-sortable', function() {
+		var $th = jQuery(this);
+		var key = String($th.data('key') || '');
+		var type = String($th.data('type') || 'text');
+		if (!key) {
+			return;
+		}
+
+		var $table = $th.closest('table');
+		var $tbody = $table.find('tbody');
+		var rows = $tbody.find('tr').get();
+		var currentKey = String($table.data('sortKey') || '');
+		var currentDir = String($table.data('sortDir') || 'asc');
+		var nextDir = (currentKey === key && currentDir === 'asc') ? 'desc' : 'asc';
+		var mul = nextDir === 'asc' ? 1 : -1;
+
+		rows.sort(function(a, b) {
+			var $a = jQuery(a);
+			var $b = jQuery(b);
+			var va = $a.attr('data-' + key);
+			var vb = $b.attr('data-' + key);
+			if (type === 'num') {
+				va = Number(va || 0);
+				vb = Number(vb || 0);
+				if (!isFinite(va)) { va = 0; }
+				if (!isFinite(vb)) { vb = 0; }
+			}
+			else {
+				va = String(va || '').toLowerCase();
+				vb = String(vb || '').toLowerCase();
+			}
+			if (va < vb) { return -1 * mul; }
+			if (va > vb) { return 1 * mul; }
+			return 0;
+		});
+
+		jQuery.each(rows, function(_, row) { $tbody.append(row); });
+		$table.data('sortKey', key);
+		$table.data('sortDir', nextDir);
+		$th.closest('tr').find('.mnz-dse-sortable').removeClass('mnz-dse-sort-asc mnz-dse-sort-desc');
+		$th.addClass(nextDir === 'asc' ? 'mnz-dse-sort-asc' : 'mnz-dse-sort-desc');
+
+		var $filter = jQuery('.mnz-dse-table-filter[data-filter-target="#' + $table.attr('id') + '"]');
+		if ($filter.length) {
+			applyTableFilter($table, $filter.val());
 		}
 	});
 	jQuery(document).on('click', function() {

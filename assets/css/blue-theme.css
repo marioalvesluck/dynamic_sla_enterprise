@@ -256,7 +256,7 @@
 }
 
 .mnz-dse-cards-exec {
-	grid-template-columns: repeat(5, minmax(0, 1fr));
+	grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .mnz-dse-card {
@@ -501,7 +501,7 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
-	min-width: 112px;
+	min-width: 190px;
 }
 
 .mnz-dse-impact-val {
@@ -528,6 +528,26 @@
 	background: linear-gradient(90deg, #0ea5e9 0%, #22c55e 100%);
 }
 
+.mnz-dse-impact-badge {
+	display: inline-block;
+	padding: 2px 7px;
+	border-radius: 999px;
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2px;
+}
+
+.mnz-dse-impact-low { color: #166534; background: rgba(34, 197, 94, 0.2); }
+.mnz-dse-impact-medium { color: #92400e; background: rgba(245, 158, 11, 0.22); }
+.mnz-dse-impact-high { color: #b91c1c; background: rgba(239, 68, 68, 0.22); }
+.mnz-dse-impact-critical { color: #7f1d1d; background: rgba(185, 28, 28, 0.28); }
+
+.mnz-dse-impact-fill-low { background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%); }
+.mnz-dse-impact-fill-medium { background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%); }
+.mnz-dse-impact-fill-high { background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%); }
+.mnz-dse-impact-fill-critical { background: linear-gradient(90deg, #dc2626 0%, #991b1b 100%); }
+
 .mnz-dse-hostimpact-list {
 	display: grid;
 	gap: 8px;
@@ -541,7 +561,7 @@
 }
 
 .mnz-dse-hostimpact-name {
-	font-size: 16px;
+	font-size: 13px;
 	color: #0f172a;
 	white-space: nowrap;
 	overflow: hidden;
@@ -567,6 +587,52 @@
 	text-align: right;
 	font-weight: 700;
 	color: #0f172a;
+	font-size: 12px;
+}
+
+.mnz-dse-table-tools {
+	display: flex;
+	justify-content: flex-end;
+	margin-bottom: 8px;
+}
+
+.mnz-dse-table-filter {
+	width: 280px;
+	max-width: 100%;
+	height: 30px;
+	border: 1px solid #9db2c6;
+	border-radius: 4px;
+	padding: 0 10px;
+	font-size: 12px;
+	background: #fff;
+	color: #1f2937;
+}
+
+.mnz-dse-sortable {
+	cursor: pointer;
+	user-select: none;
+	position: relative;
+	padding-right: 16px !important;
+}
+
+.mnz-dse-sortable::after {
+	content: "↕";
+	position: absolute;
+	right: 5px;
+	top: 50%;
+	transform: translateY(-50%);
+	font-size: 10px;
+	opacity: 0.45;
+}
+
+.mnz-dse-sortable.mnz-dse-sort-asc::after {
+	content: "↑";
+	opacity: 0.9;
+}
+
+.mnz-dse-sortable.mnz-dse-sort-desc::after {
+	content: "↓";
+	opacity: 0.9;
 }
 
 @media (max-width: 1280px) {

@@ -174,3 +174,19 @@
 [theme="hc-dark"] .mnz-dse-hostimpact-bar {
 	background: #334155;
 }
+
+[theme="dark-theme"] .mnz-dse-impact-low,
+[theme="hc-dark"] .mnz-dse-impact-low { color: #86efac; background: rgba(22, 163, 74, 0.24); }
+[theme="dark-theme"] .mnz-dse-impact-medium,
+[theme="hc-dark"] .mnz-dse-impact-medium { color: #fcd34d; background: rgba(217, 119, 6, 0.28); }
+[theme="dark-theme"] .mnz-dse-impact-high,
+[theme="hc-dark"] .mnz-dse-impact-high { color: #fca5a5; background: rgba(220, 38, 38, 0.28); }
+[theme="dark-theme"] .mnz-dse-impact-critical,
+[theme="hc-dark"] .mnz-dse-impact-critical { color: #fecaca; background: rgba(127, 29, 29, 0.35); }
+
+[theme="dark-theme"] .mnz-dse-table-filter,
+[theme="hc-dark"] .mnz-dse-table-filter {
+	background: #1f2937;
+	border-color: rgba(255, 255, 255, 0.2);
+	color: #e5e7eb;
+}

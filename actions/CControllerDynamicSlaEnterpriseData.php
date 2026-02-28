@@ -29,6 +29,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'triggerids' => 'string',
 			'severity' => 'string',
 			'severity_explicit' => 'string',
+			'impact_level' => 'string',
 			'exclude_triggerids' => 'string',
 			'period' => 'string',
 			'from' => 'string',
@@ -75,11 +76,13 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		// Severity filter temporarily disabled by product decision.
 		$severity_explicit = false;
 		$severities = [];
+		$impact_level = strtolower(trim((string) $this->getInput('impact_level', 'all')));
 		$debug = [
 			'input_groupids' => $groupids,
 			'input_hostids' => $hostids,
 			'input_severity' => $severities,
-			'severity_explicit' => $severity_explicit
+			'severity_explicit' => $severity_explicit,
+			'impact_level' => $impact_level
 		];
 
 		[$from_ts, $to_ts] = $this->resolveWindow(
@@ -201,6 +204,14 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		}
 		$window_problem_ids = $this->findTriggersWithProblemsInWindow(array_map('intval', array_column($triggers, 'triggerid')), $from_ts, $to_ts);
 		$debug['window_problem_ids_count'] = count($window_problem_ids);
+		if ($impact_level !== 'all' && $triggers) {
+			$impact_map = $this->buildDependencyImpactMap(array_map('intval', array_column($triggers, 'triggerid')));
+			$allowed = array_flip($this->filterTriggeridsByImpact(array_keys($impact_map), $impact_map, $impact_level));
+			$triggers = array_values(array_filter($triggers, static function(array $trigger) use ($allowed): bool {
+				return isset($allowed[(int) ($trigger['triggerid'] ?? 0)]);
+			}));
+			$debug['impact_filter_after_count'] = count($triggers);
+		}
 
 		$groups_out = [];
 		foreach ($groups as $group) {
@@ -252,6 +263,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		$business_end = (string) $this->getInput('business_end', '18:00');
 		$exclude_maintenance = ((int) $this->getInput('exclude_maintenance', '1') === 1);
 		$slo_target = max(0.0, min(100.0, (float) $this->getInput('slo_target', '99.9')));
+		$impact_level = strtolower(trim((string) $this->getInput('impact_level', 'all')));
 
 		[$from_ts, $to_ts] = $this->resolveWindow($period, $from_input, $to_input);
 		$window = ['s' => $from_ts, 'e' => $to_ts];
@@ -298,8 +310,17 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			}, ARRAY_FILTER_USE_KEY);
 		}
 
+		$impact_map = $this->buildDependencyImpactMap($triggerids);
+		$triggerids = $this->filterTriggeridsByImpact($triggerids, $impact_map, $impact_level);
+		if ($trigger_map) {
+			$allowed = array_flip($triggerids);
+			$trigger_map = array_filter($trigger_map, static function(string $tid) use ($allowed): bool {
+				return isset($allowed[(int) $tid]);
+			}, ARRAY_FILTER_USE_KEY);
+		}
+
 		if (!$triggerids) {
-			return $this->buildEmptyPayload($from_ts, $to_ts, $slo_target, $groupids, $hostids, $severities, $business_mode, $business_start, $business_end, $exclude_maintenance, $exclude_triggerids);
+			return $this->buildEmptyPayload($from_ts, $to_ts, $slo_target, $groupids, $hostids, $severities, $business_mode, $business_start, $business_end, $exclude_maintenance, $exclude_triggerids, $impact_level);
 		}
 
 		$incidents = $this->buildIncidentIntervals($triggerids, $from_ts, $to_ts, $exclude_triggerids);
@@ -367,11 +388,13 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		$mttr_seconds = $mttr_samples ? (int) round(array_sum($mttr_samples) / max(1, count($mttr_samples))) : 0;
 
 		arsort($per_trigger_downtime);
-		$impact_map = $this->buildDependencyImpactMap(array_map('intval', array_keys($per_trigger_downtime)));
 		$host_impact_map = [];
 		$top_triggers = [];
+		$total_impact = 0;
 		foreach (array_slice($per_trigger_downtime, 0, 12, true) as $tid => $seconds) {
 			$impact = (int) ($impact_map[$tid]['risk_score'] ?? 0);
+			$total_impact += $impact;
+			$impact_level_name = $this->impactLevelForScore($impact);
 			$host_name = (string) ($trigger_map[$tid]['host'] ?? '-');
 			if ($host_name !== '' && $host_name !== '-') {
 				if (!isset($host_impact_map[$host_name])) {
@@ -394,6 +417,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'severity' => (int) ($trigger_map[$tid]['severity'] ?? 0),
 				'severity_label' => $this->severityName((int) ($trigger_map[$tid]['severity'] ?? 0)),
 				'impact' => $impact,
+				'impact_level' => $impact_level_name,
 				'impact_formula' => (string) ($impact_map[$tid]['risk_formula'] ?? ''),
 				'downtime_seconds' => (int) $seconds,
 				'downtime' => $this->fmtDuration((int) $seconds)
@@ -410,6 +434,14 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			return ((int) $b['impact']) <=> ((int) $a['impact']);
 		});
 		$hosts_impact = array_slice($hosts_impact, 0, 8);
+		foreach ($hosts_impact as &$host_row) {
+			$avg = (int) round(((int) $host_row['impact']) / max(1, (int) $host_row['triggers']));
+			$host_row['impact_avg'] = $avg;
+			$host_row['impact_level'] = $this->impactLevelForScore($avg);
+		}
+		unset($host_row);
+		$impact_index = count($top_triggers) > 0 ? (int) round($total_impact / max(1, count($top_triggers))) : 0;
+		$impact_index_level = $this->impactLevelForScore($impact_index);
 
 		usort($timeline_rows, static function(array $a, array $b): int {
 			return $b['start'] <=> $a['start'];
@@ -442,13 +474,17 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'downtime_union' => $this->fmtDuration((int) $total_downtime),
 				'uptime' => $this->fmtDuration((int) $total_uptime),
 				'mttr' => $this->fmtDuration($mttr_seconds),
-				'risk' => $risk
+				'risk' => $risk,
+				'total_impact' => (int) $total_impact,
+				'impact_index' => (int) $impact_index,
+				'impact_index_level' => $impact_index_level
 			],
 			'filters' => [
 				'groupids' => $groupids,
 				'hostids' => $hostids,
 				'triggerids' => $triggerids,
 				'severity' => $severities,
+				'impact_level' => $impact_level,
 				'exclude_triggerids' => array_map('intval', array_keys($exclude_triggerids)),
 				'business_mode' => $business_mode,
 				'business_start' => $business_start,
@@ -460,7 +496,9 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'sla_achieved' => round($availability, 3),
 				'downtime_window' => $this->fmtDuration((int) $total_downtime_sum),
 				'incidents_this_window' => count($timeline_rows),
-				'services_impacted' => count($top_triggers)
+				'services_impacted' => count($top_triggers),
+				'total_impact_window' => (int) $total_impact,
+				'impact_index_level' => $impact_index_level
 			],
 			'top_triggers' => $top_triggers,
 			'hosts_impact' => $hosts_impact,
@@ -595,7 +633,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			}
 			$trigger_map[$tid] = [
 				'name' => (string) ($trigger['description'] ?? _s('Trigger %1$s', (string) $tid)),
-				'host' => !empty($trigger['hosts'][0]['name']) ? (string) $trigger['hosts'][0]['name'] : '-',
+				'host' => !empty($trigger['hosts'][0]['name']) ? $this->normalizeHostLabel((string) $trigger['hosts'][0]['name']) : '-',
 				'severity' => (int) ($trigger['priority'] ?? 0)
 			];
 		}
@@ -854,7 +892,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 	}
 
 
-	private function buildEmptyPayload(int $from_ts, int $to_ts, float $slo_target, array $groupids, array $hostids, array $severities, string $business_mode, string $business_start, string $business_end, bool $exclude_maintenance, array $exclude_triggerids): array {
+	private function buildEmptyPayload(int $from_ts, int $to_ts, float $slo_target, array $groupids, array $hostids, array $severities, string $business_mode, string $business_start, string $business_end, bool $exclude_maintenance, array $exclude_triggerids, string $impact_level = 'all'): array {
 		$den = max(1, $to_ts - $from_ts);
 		return [
 			'note' => _('No triggers found for selected filters.'),
@@ -872,13 +910,17 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'downtime_union' => $this->fmtDuration(0),
 				'uptime' => $this->fmtDuration($den),
 				'mttr' => $this->fmtDuration(0),
-				'risk' => 'Low'
+				'risk' => 'Low',
+				'total_impact' => 0,
+				'impact_index' => 0,
+				'impact_index_level' => 'low'
 			],
 			'filters' => [
 				'groupids' => $groupids,
 				'hostids' => $hostids,
 				'triggerids' => [],
 				'severity' => $severities,
+				'impact_level' => $impact_level,
 				'exclude_triggerids' => array_map('intval', array_keys($exclude_triggerids)),
 				'business_mode' => $business_mode,
 				'business_start' => $business_start,
@@ -890,7 +932,9 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'sla_achieved' => 100.0,
 				'downtime_window' => $this->fmtDuration(0),
 				'incidents_this_window' => 0,
-				'services_impacted' => 0
+				'services_impacted' => 0,
+				'total_impact_window' => 0,
+				'impact_index_level' => 'low'
 			],
 			'top_triggers' => [],
 			'hosts_impact' => [],
@@ -1427,6 +1471,45 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			5 => 'Disaster'
 		];
 		return $names[$severity] ?? 'Unknown';
+	}
+
+	private function normalizeHostLabel(string $name): string {
+		$name = trim(preg_replace('/\s+/', ' ', $name) ?? $name);
+		$name = preg_replace('/\s*-\s*/', ' - ', $name) ?? $name;
+		return trim($name);
+	}
+
+	private function impactLevelForScore(int $score): string {
+		if ($score >= 31) {
+			return 'critical';
+		}
+		if ($score >= 21) {
+			return 'high';
+		}
+		if ($score >= 11) {
+			return 'medium';
+		}
+		return 'low';
+	}
+
+	private function filterTriggeridsByImpact(array $triggerids, array $impact_map, string $impact_level): array {
+		$impact_level = strtolower(trim($impact_level));
+		if ($impact_level === '' || $impact_level === 'all') {
+			return array_values(array_unique(array_map('intval', $triggerids)));
+		}
+		$allowed = ['low' => true, 'medium' => true, 'high' => true, 'critical' => true];
+		if (!isset($allowed[$impact_level])) {
+			return array_values(array_unique(array_map('intval', $triggerids)));
+		}
+
+		$out = [];
+		foreach (array_values(array_unique(array_map('intval', $triggerids))) as $tid) {
+			$score = (int) ($impact_map[$tid]['risk_score'] ?? 0);
+			if ($this->impactLevelForScore($score) === $impact_level) {
+				$out[] = $tid;
+			}
+		}
+		return $out;
 	}
 
 	private function encodeJson(array $payload): string {
