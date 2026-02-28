@@ -2,6 +2,7 @@
 
 namespace Modules\DynamicSlaEnterprise\Actions;
 
+use API;
 use CController;
 use CControllerResponseData;
 use CRoleHelper;
@@ -47,6 +48,8 @@ class CControllerDynamicSlaEnterpriseReport extends CController {
 			}
 		}
 
+		$scope = $this->resolveScopeNames((array) ($report_data['filters'] ?? []));
+
 		$generated_at_ts = time();
 		$seed = json_encode([
 			'persona' => $persona,
@@ -64,10 +67,75 @@ class CControllerDynamicSlaEnterpriseReport extends CController {
 				'report_id' => $report_id,
 				'timezone' => date_default_timezone_get(),
 				'author' => 'NOC',
-				'environment' => 'Production'
+				'environment' => 'Production',
+				'scope' => $scope,
+				'source' => 'frontend_snapshot'
 			]
 		]);
 		$response->setTitle(_('Dynamic SLA Enterprise Report'));
 		$this->setResponse($response);
+	}
+
+	private function resolveScopeNames(array $filters): array {
+		$groupids = array_values(array_filter(array_map('intval', (array) ($filters['groupids'] ?? []))));
+		$hostids = array_values(array_filter(array_map('intval', (array) ($filters['hostids'] ?? []))));
+		$triggerids = array_values(array_filter(array_map('intval', (array) ($filters['triggerids'] ?? []))));
+
+		$groups = [];
+		$hosts = [];
+		$triggers = [];
+
+		if ($groupids) {
+			try {
+				$rows = API::HostGroup()->get([
+					'output' => ['groupid', 'name'],
+					'groupids' => $groupids,
+					'preservekeys' => false
+				]);
+				foreach ($rows as $r) {
+					$groups[] = (string) ($r['name'] ?? '');
+				}
+			}
+			catch (\Throwable $e) {
+			}
+		}
+
+		if ($hostids) {
+			try {
+				$rows = API::Host()->get([
+					'output' => ['hostid', 'name'],
+					'hostids' => $hostids,
+					'preservekeys' => false
+				]);
+				foreach ($rows as $r) {
+					$hosts[] = (string) ($r['name'] ?? '');
+				}
+			}
+			catch (\Throwable $e) {
+			}
+		}
+
+		if ($triggerids) {
+			try {
+				$rows = API::Trigger()->get([
+					'output' => ['triggerid', 'description'],
+					'triggerids' => $triggerids,
+					'expandDescription' => true,
+					'preservekeys' => false,
+					'limit' => 200
+				]);
+				foreach ($rows as $r) {
+					$triggers[] = (string) ($r['description'] ?? '');
+				}
+			}
+			catch (\Throwable $e) {
+			}
+		}
+
+		return [
+			'groups' => $groups,
+			'hosts' => $hosts,
+			'triggers' => $triggers
+		];
 	}
 }

@@ -611,11 +611,11 @@ jQuery(function() {
 				'<div class="mnz-dse-section-title">Executive Summary</div>' +
 				'<div class="mnz-dse-cards mnz-dse-cards-exec">' +
 					'<div class="mnz-dse-card"><div class="mnz-dse-k">Current Incident Risk</div><div class="mnz-dse-badge ' + riskCls + '">' + risk + '</div></div>' +
-					'<div class="mnz-dse-card"><div class="mnz-dse-k">SLA Achieved (Window)</div><div class="mnz-dse-v">' + fmtPct(ex.sla_achieved) + '</div></div>' +
-					'<div class="mnz-dse-card"><div class="mnz-dse-k">Downtime (Window)</div><div class="mnz-dse-v">' + (ex.downtime_window || '-') + '</div></div>' +
-					'<div class="mnz-dse-card"><div class="mnz-dse-k">Incidents in Window</div><div class="mnz-dse-v">' + Number(ex.incidents_this_window || 0) + '</div></div>' +
+					'<div class="mnz-dse-card"><div class="mnz-dse-k">SLA Achieved</div><div class="mnz-dse-v">' + fmtPct(ex.sla_achieved) + '</div></div>' +
+					'<div class="mnz-dse-card"><div class="mnz-dse-k">Downtime</div><div class="mnz-dse-v">' + (ex.downtime_window || '-') + '</div></div>' +
+					'<div class="mnz-dse-card"><div class="mnz-dse-k">Incidents</div><div class="mnz-dse-v">' + Number(ex.incidents_this_window || 0) + '</div></div>' +
 					'<div class="mnz-dse-card"><div class="mnz-dse-k">Triggers Impacted</div><div class="mnz-dse-v">' + Number(ex.services_impacted || 0) + '</div></div>' +
-					'<div class="mnz-dse-card"><div class="mnz-dse-k">Total impact (window)</div><div class="mnz-dse-v mnz-dse-impact-' + impactBand(ex.total_impact_window) + '">' + Number(ex.total_impact_window || 0) + '</div></div>' +
+					'<div class="mnz-dse-card"><div class="mnz-dse-k">Total impact</div><div class="mnz-dse-v mnz-dse-impact-' + impactBand(ex.total_impact_window) + '">' + Number(ex.total_impact_window || 0) + '</div></div>' +
 				'</div>' +
 			'</div>';
 		jQuery('#dse-exec').html(html);

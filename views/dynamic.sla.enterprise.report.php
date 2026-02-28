@@ -19,6 +19,7 @@ $timeline = (array) ($report['timeline'] ?? []);
 $generated_at = (string) ($data['generated_at'] ?? '');
 $timezone = (string) ($meta['timezone'] ?? date_default_timezone_get());
 $report_id = (string) ($meta['report_id'] ?? '');
+$scope = (array) ($meta['scope'] ?? []);
 
 $fmt_pct = static function($v): string {
 	if (!is_numeric($v)) {
@@ -51,12 +52,33 @@ $to_human = static function($seconds): string {
 	return $m.'m';
 };
 
+$pill_for_severity = static function($label): string {
+	$v = strtolower((string) $label);
+	if ($v === 'disaster') {
+		return 'dse-rpt-pill dse-rpt-pill-risk';
+	}
+	if ($v === 'high') {
+		return 'dse-rpt-pill dse-rpt-pill-warn';
+	}
+	if ($v === 'average' || $v === 'warning') {
+		return 'dse-rpt-pill dse-rpt-pill-amber';
+	}
+	return 'dse-rpt-pill dse-rpt-pill-ok';
+};
+
+$status_pill = static function($status): string {
+	return strtoupper((string) $status) === 'PROBLEM'
+		? 'dse-rpt-pill dse-rpt-pill-risk'
+		: 'dse-rpt-pill dse-rpt-pill-ok';
+};
+
 $window_from = isset($summary['window_from']) ? (int) $summary['window_from'] : 0;
 $window_to = isset($summary['window_to']) ? (int) $summary['window_to'] : 0;
 $window_label = '-';
 if ($window_from > 0 && $window_to > 0) {
 	$window_label = date('d/m/Y H:i', $window_from).' - '.date('d/m/Y H:i', $window_to);
 }
+$exclude_maintenance = ((int) ($filters['exclude_maintenance'] ?? 0) === 1) ? 'Yes' : 'No';
 
 $availability = is_numeric($summary['availability'] ?? null) ? (float) $summary['availability'] : 0.0;
 $slo_target = is_numeric($summary['slo_target'] ?? null) ? (float) $summary['slo_target'] : 99.9;
@@ -106,9 +128,14 @@ foreach ($monthly_counts as $m) {
 	$monthly_max = max($monthly_max, (int) $m['count']);
 }
 $monthly_max = max(1, $monthly_max);
+$max_host_impact = 0;
+foreach ($hosts_impact as $hrow) {
+	$max_host_impact = max($max_host_impact, (int) ($hrow['impact'] ?? 0));
+}
+$max_host_impact = max(1, $max_host_impact);
 
 $cover_meta_grid = (new CDiv([
-	(new CDiv([new CTag('h4', true, _('SLA')), new CSpan($fmt_filters((array) ($filters['groupids'] ?? [])))]))->addClass('dse-rpt-cover-card'),
+	(new CDiv([new CTag('h4', true, _('SLA')), new CSpan($scope['groups'] ? $fmt_filters((array) $scope['groups']) : $fmt_filters((array) ($filters['groupids'] ?? [])))]))->addClass('dse-rpt-cover-card'),
 	(new CDiv([new CTag('h4', true, _('Generated at')), new CSpan($generated_at)]))->addClass('dse-rpt-cover-card'),
 	(new CDiv([new CTag('h4', true, _('Timezone')), new CSpan($timezone)]))->addClass('dse-rpt-cover-card'),
 	(new CDiv([new CTag('h4', true, _('Author / Environment')), new CSpan((string) ($meta['author'] ?? 'NOC').' / '.(string) ($meta['environment'] ?? 'Production'))]))->addClass('dse-rpt-cover-card'),
@@ -123,31 +150,17 @@ $manager_view = (new CDiv([
 	]))->addClass('dse-rpt-manager-status'),
 	(new CTag('h3', true, _('Manager view')))->addClass('dse-rpt-manager-title'),
 	(new CDiv([
-		(new CSpan(_('Global SLI')))->addClass('dse-rpt-manager-label'),
-		(new CDiv([
-			(new CSpan())->addClass('dse-rpt-manager-fill '.($availability >= $slo_target ? 'dse-rpt-fill-green' : 'dse-rpt-fill-red'))->setAttribute('style', 'width:'.number_format(max(0.0, min(100.0, $availability)), 2, '.', '').'%'),
-			(new CSpan(number_format($availability, 2).'%'))->addClass('dse-rpt-manager-value')
-		]))->addClass('dse-rpt-manager-track')
-	]))->addClass('dse-rpt-manager-row'),
-	(new CDiv([
-		(new CSpan(_('SLO target')))->addClass('dse-rpt-manager-label'),
+		(new CSpan(_('SLO')))->addClass('dse-rpt-manager-label'),
 		(new CDiv([
 			(new CSpan())->addClass('dse-rpt-manager-fill dse-rpt-fill-green')->setAttribute('style', 'width:'.number_format(max(0.0, min(100.0, $slo_target)), 2, '.', '').'%'),
 			(new CSpan(number_format($slo_target, 2).'%'))->addClass('dse-rpt-manager-value')
 		]))->addClass('dse-rpt-manager-track')
 	]))->addClass('dse-rpt-manager-row'),
 	(new CDiv([
-		(new CSpan(_('Services OK')))->addClass('dse-rpt-manager-label'),
+		(new CSpan(_('Global SLI')))->addClass('dse-rpt-manager-label'),
 		(new CDiv([
-			(new CSpan())->addClass('dse-rpt-manager-fill dse-rpt-fill-green-soft')->setAttribute('style', 'width:'.number_format($ok_pct, 2, '.', '').'%'),
-			(new CSpan($services_ok.'/'.$services_total.' ('.number_format($ok_pct, 2).'%)'))->addClass('dse-rpt-manager-value')
-		]))->addClass('dse-rpt-manager-track')
-	]))->addClass('dse-rpt-manager-row'),
-	(new CDiv([
-		(new CSpan(_('Services at risk')))->addClass('dse-rpt-manager-label'),
-		(new CDiv([
-			(new CSpan())->addClass('dse-rpt-manager-fill dse-rpt-fill-red')->setAttribute('style', 'width:'.number_format($risk_pct, 2, '.', '').'%'),
-			(new CSpan($services_impacted.'/'.$services_total.' ('.number_format($risk_pct, 2).'%)'))->addClass('dse-rpt-manager-value')
+			(new CSpan())->addClass('dse-rpt-manager-fill '.($availability >= $slo_target ? 'dse-rpt-fill-green' : 'dse-rpt-fill-red'))->setAttribute('style', 'width:'.number_format(max(0.0, min(100.0, $availability)), 2, '.', '').'%'),
+			(new CSpan(number_format($availability, 2).'%'))->addClass('dse-rpt-manager-value')
 		]))->addClass('dse-rpt-manager-track')
 	]))->addClass('dse-rpt-manager-row'),
 	(new CDiv([
@@ -203,24 +216,9 @@ $kpi_grid = (new CDiv([
 $context_list = (new CList())
 	->addItem(_('Period') . ': ' . $window_label)
 	->addItem(_('Business mode') . ': ' . (string) ($filters['business_mode'] ?? 'all_time'))
-	->addItem(_('Groups') . ': ' . $fmt_filters((array) ($filters['groupids'] ?? [])))
-	->addItem(_('Hosts') . ': ' . $fmt_filters((array) ($filters['hostids'] ?? [])))
-	->addItem(_('Triggers') . ': ' . $fmt_filters((array) ($filters['triggerids'] ?? [])));
-
-$top_triggers_table = (new CTableInfo())
-	->addClass('dse-rpt-table')
-	->setHeader([_('Trigger ID'), _('Host'), _('Name'), _('Start time'), _('Severity'), _('Impact'), _('Downtime')]);
-foreach (array_slice($top_triggers, 0, 30) as $row) {
-	$top_triggers_table->addRow([
-		(string) ($row['triggerid'] ?? '-'),
-		(string) ($row['host'] ?? '-'),
-		(string) ($row['name'] ?? '-'),
-		isset($row['start']) ? date('d/m/Y, H:i:s', (int) $row['start']) : '-',
-		(string) ($row['severity_label'] ?? '-'),
-		(string) (int) ($row['impact'] ?? 0),
-		(string) ($row['downtime'] ?? '-')
-	]);
-}
+	->addItem(_('Exclude maintenance') . ': ' . $exclude_maintenance)
+	->addItem(_('Groups') . ': ' . ($scope['groups'] ? $fmt_filters((array) $scope['groups']) : $fmt_filters((array) ($filters['groupids'] ?? []))))
+	->addItem(_('Hosts') . ': ' . ($scope['hosts'] ? $fmt_filters((array) $scope['hosts']) : $fmt_filters((array) ($filters['hostids'] ?? []))));
 
 $hosts_impact_table = (new CTableInfo())
 	->addClass('dse-rpt-table')
@@ -228,34 +226,116 @@ $hosts_impact_table = (new CTableInfo())
 foreach (array_slice($hosts_impact, 0, 20) as $row) {
 	$hosts_impact_table->addRow([
 		(string) ($row['host'] ?? '-'),
-		(string) (int) ($row['impact'] ?? 0),
-		(string) (int) ($row['triggers'] ?? 0),
-		$to_human($row['downtime_seconds'] ?? 0)
+		(new CSpan((string) (int) ($row['impact'] ?? 0)))->addClass('dse-rpt-num'),
+		(new CSpan((string) (int) ($row['triggers'] ?? 0)))->addClass('dse-rpt-num'),
+		(new CSpan($to_human($row['downtime_seconds'] ?? 0)))->addClass('dse-rpt-num')
 	]);
 }
+
+$top_triggers_table = (new CTableInfo())
+	->addClass('dse-rpt-table')
+	->setHeader([_('Trigger ID'), _('Host'), _('Name'), _('Start time'), _('Severity'), _('Impact'), _('Downtime')]);
+foreach (array_slice($top_triggers, 0, 25) as $row) {
+	$severity_label = (string) ($row['severity_label'] ?? '-');
+	$top_triggers_table->addRow([
+		(new CSpan((string) ($row['triggerid'] ?? '-')))->addClass('dse-rpt-num'),
+		(string) ($row['host'] ?? '-'),
+		(string) ($row['name'] ?? '-'),
+		isset($row['start']) ? date('d/m/Y, H:i:s', (int) $row['start']) : '-',
+		(new CSpan($severity_label))->addClass($pill_for_severity($severity_label)),
+		(new CSpan((string) (int) ($row['impact'] ?? 0)))->addClass('dse-rpt-num'),
+		(new CSpan((string) ($row['downtime'] ?? '-')))->addClass('dse-rpt-num')
+	]);
+}
+
+$host_impact_chart = (new CDiv())->addClass('dse-rpt-host-impact-chart');
+foreach (array_slice($hosts_impact, 0, 10) as $row) {
+	$impact = (int) ($row['impact'] ?? 0);
+	$bar_pct = ($impact / $max_host_impact) * 100.0;
+	$host_impact_chart->addItem(
+		(new CDiv([
+			(new CSpan((string) ($row['host'] ?? '-')))->addClass('dse-rpt-host-impact-name'),
+			(new CDiv([
+				(new CSpan())
+					->addClass('dse-rpt-host-impact-fill')
+					->setAttribute('style', 'width:'.number_format(max(0.0, min(100.0, $bar_pct)), 2, '.', '').'%')
+			]))->addClass('dse-rpt-host-impact-track'),
+			(new CSpan((string) $impact))->addClass('dse-rpt-host-impact-value')
+		]))->addClass('dse-rpt-host-impact-row')
+	);
+}
+
+$severity_counts = [];
+$open_count = 0;
+$resolved_count = 0;
+foreach ($timeline as $row) {
+	$sev = (string) ($row['severity_label'] ?? 'Unknown');
+	$severity_counts[$sev] = (int) ($severity_counts[$sev] ?? 0) + 1;
+	if (strtoupper((string) ($row['status'] ?? '')) === 'PROBLEM') {
+		$open_count++;
+	}
+	else {
+		$resolved_count++;
+	}
+}
+$severity_summary = [];
+foreach ($severity_counts as $k => $v) {
+	$severity_summary[] = $k.': '.$v;
+}
+$severity_line = $severity_summary ? implode(' | ', $severity_summary) : '-';
 
 $timeline_table = (new CTableInfo())
 	->addClass('dse-rpt-table')
 	->setHeader([_('Start time'), _('Recovery time'), _('Status'), _('Severity'), _('Host'), _('Trigger'), _('Duration')]);
 foreach (array_slice($timeline, 0, 120) as $row) {
+	$severity_label = (string) ($row['severity_label'] ?? '-');
+	$status_label = (string) ($row['status'] ?? '-');
 	$timeline_table->addRow([
 		isset($row['start']) ? date('d/m/Y, H:i:s', (int) $row['start']) : '-',
 		isset($row['end']) ? date('d/m/Y, H:i:s', (int) $row['end']) : '-',
-		(string) ($row['status'] ?? '-'),
-		(string) ($row['severity_label'] ?? '-'),
+		(new CSpan($status_label))->addClass($status_pill($status_label)),
+		(new CSpan($severity_label))->addClass($pill_for_severity($severity_label)),
 		(string) ($row['host'] ?? '-'),
 		(string) ($row['trigger_name'] ?? '-'),
-		(string) ($row['duration'] ?? '-')
+		(new CSpan((string) ($row['duration'] ?? '-')))->addClass('dse-rpt-num')
 	]);
 }
 
 $persona_section = null;
 if ($persona === 'noc') {
-	$persona_section = (new CDiv([
-		(new CTag('h2', true, _('NOC - Operational deep dive'))),
-		$kpi_grid,
+	$noc_details_card = (new CDiv([
+		(new CTag('h3', true, _('Operational details'))),
+		(new CList())
+			->addItem(_('Timeline rows') . ': ' . count($timeline))
+			->addItem(_('Open incidents') . ': ' . $open_count)
+			->addItem(_('Resolved incidents') . ': ' . $resolved_count)
+			->addItem(_('Severity mix') . ': ' . $severity_line)
+	]))->addClass('dse-rpt-info-card');
+
+	$noc_service_card = (new CDiv([
+		(new CTag('h3', true, _('Service posture'))),
+		(new CList())
+			->addItem(_('Services OK') . ': ' . $services_ok . '/' . $services_total . ' (' . number_format($ok_pct, 2) . '%)')
+			->addItem(_('Services at risk') . ': ' . $services_impacted . '/' . $services_total . ' (' . number_format($risk_pct, 2) . '%)')
+	]))->addClass('dse-rpt-info-card');
+
+	$noc_filter_card = (new CDiv([
 		(new CTag('h3', true, _('Filter context'))),
-		$context_list,
+		$context_list
+	]))->addClass('dse-rpt-info-card');
+
+	$persona_section = (new CDiv([
+		(new CTag('h2', true, _('NOC - Operational'))),
+		$kpi_grid,
+		(new CDiv([
+			$noc_details_card,
+			$noc_service_card,
+			$noc_filter_card
+		]))->addClass('dse-rpt-info-grid'),
+		(new CDiv([
+			(new CTag('h3', true, _('Top hosts by impact'))),
+			$host_impact_chart
+		]))->addClass('dse-rpt-chart-card'),
 		(new CTag('h3', true, _('Top triggers by downtime'))),
 		$top_triggers_table,
 		(new CTag('h3', true, _('Timeline'))),
@@ -263,28 +343,75 @@ if ($persona === 'noc') {
 	]))->addClass('dse-rpt-page dse-rpt-block');
 }
 elseif ($persona === 'gestao') {
+	$gestao_filter_card = (new CDiv([
+		(new CTag('h3', true, _('Filter context')))->addClass('dse-rpt-card-title dse-rpt-card-title-info'),
+		$context_list
+	]))->addClass('dse-rpt-info-card');
+
+	$gestao_service_card = (new CDiv([
+		(new CTag('h3', true, _('Service posture')))->addClass('dse-rpt-card-title dse-rpt-card-title-risk'),
+		(new CList())
+			->addItem(_('Services OK') . ': ' . $services_ok . '/' . $services_total . ' (' . number_format($ok_pct, 2) . '%)')
+			->addItem(_('Services at risk') . ': ' . $services_impacted . '/' . $services_total . ' (' . number_format($risk_pct, 2) . '%)')
+			->addItem(_('Current risk') . ': ' . ucfirst($risk_level))
+	]))->addClass('dse-rpt-info-card');
+
+	$gestao_kpi_card = (new CDiv([
+		(new CTag('h3', true, _('Performance highlights')))->addClass('dse-rpt-card-title dse-rpt-card-title-kpi'),
+		(new CList())
+			->addItem(_('Availability') . ': ' . $fmt_pct($summary['availability'] ?? null))
+			->addItem(_('Downtime') . ': ' . (string) ($summary['downtime'] ?? '-'))
+			->addItem(_('Incidents') . ': ' . (string) $incidents)
+			->addItem(_('Total impact') . ': ' . (string) $total_impact)
+	]))->addClass('dse-rpt-info-card');
+
 	$persona_section = (new CDiv([
 		(new CTag('h2', true, _('Gestao - Service performance'))),
 		$kpi_grid,
-		(new CTag('h3', true, _('Filter context'))),
-		$context_list,
+		(new CDiv([
+			$gestao_filter_card,
+			$gestao_service_card,
+			$gestao_kpi_card
+		]))->addClass('dse-rpt-info-grid'),
 		(new CTag('h3', true, _('Top hosts by impact'))),
-		$hosts_impact_table,
-		(new CTag('h3', true, _('Top triggers by downtime'))),
-		$top_triggers_table
+		$hosts_impact_table
 	]))->addClass('dse-rpt-page dse-rpt-block');
 }
 else {
-	$persona_section = (new CDiv([
-		(new CTag('h2', true, _('Diretoria - Executive summary'))),
-		$kpi_grid,
-		(new CTag('h3', true, _('Resumo executivo'))),
+	$diretoria_summary_card = (new CDiv([
+		(new CTag('h3', true, _('Resumo executivo')))->addClass('dse-rpt-card-title dse-rpt-card-title-kpi'),
 		(new CList())
 			->addItem(_('Current risk') . ': ' . (string) ($executive['current_incident_risk'] ?? '-'))
 			->addItem(_('SLA achieved') . ': ' . $fmt_pct($executive['sla_achieved'] ?? null))
-			->addItem(_('Incidents in window') . ': ' . (string) (int) ($executive['incidents_this_window'] ?? 0))
+			->addItem(_('Incidents') . ': ' . (string) (int) ($executive['incidents_this_window'] ?? 0))
 			->addItem(_('Triggers impacted') . ': ' . (string) (int) ($executive['services_impacted'] ?? 0))
-			->addItem(_('Total impact') . ': ' . (string) $total_impact),
+			->addItem(_('Total impact') . ': ' . (string) $total_impact)
+	]))->addClass('dse-rpt-info-card');
+
+	$diretoria_scope_card = (new CDiv([
+		(new CTag('h3', true, _('Scope')))->addClass('dse-rpt-card-title dse-rpt-card-title-info'),
+		(new CList())
+			->addItem(_('Period') . ': ' . $window_label)
+			->addItem(_('Business mode') . ': ' . (string) ($filters['business_mode'] ?? 'all_time'))
+			->addItem(_('Groups') . ': ' . ($scope['groups'] ? $fmt_filters((array) $scope['groups']) : $fmt_filters((array) ($filters['groupids'] ?? []))))
+			->addItem(_('Hosts') . ': ' . ($scope['hosts'] ? $fmt_filters((array) $scope['hosts']) : $fmt_filters((array) ($filters['hostids'] ?? []))))
+	]))->addClass('dse-rpt-info-card');
+
+	$diretoria_service_card = (new CDiv([
+		(new CTag('h3', true, _('Service posture')))->addClass('dse-rpt-card-title dse-rpt-card-title-risk'),
+		(new CList())
+			->addItem(_('Services OK') . ': ' . $services_ok . '/' . $services_total . ' (' . number_format($ok_pct, 2) . '%)')
+			->addItem(_('Services at risk') . ': ' . $services_impacted . '/' . $services_total . ' (' . number_format($risk_pct, 2) . '%)')
+	]))->addClass('dse-rpt-info-card');
+
+	$persona_section = (new CDiv([
+		(new CTag('h2', true, _('Diretoria - Executive summary'))),
+		$kpi_grid,
+		(new CDiv([
+			$diretoria_summary_card,
+			$diretoria_scope_card,
+			$diretoria_service_card
+		]))->addClass('dse-rpt-info-grid'),
 		(new CTag('h3', true, _('Top hosts by impact'))),
 		$hosts_impact_table
 	]))->addClass('dse-rpt-page dse-rpt-block');
@@ -297,7 +424,9 @@ $wrapper = (new CDiv([
 			->addClass(ZBX_STYLE_BTN_ALT)
 	]))->addClass('dse-rpt-actions'),
 	$cover_page,
-	$persona_section
+	$persona_section,
+	(new CDiv('Report ID: '.$report_id.' | Generated: '.$generated_at.' | Persona: '.strtoupper($persona)))
+		->addClass('dse-rpt-print-footer')
 ]))->setId('dse-rpt-wrapper');
 
 $html_page = (new CHtmlPage())
@@ -305,6 +434,7 @@ $html_page = (new CHtmlPage())
 	->setDocUrl('');
 
 $js = 'document.addEventListener("DOMContentLoaded",function(){'
+	. 'document.body.classList.add("dse-rpt-print-report");'
 	. 'var b=document.getElementById("dse-rpt-print");'
 	. 'if(b){b.addEventListener("click",function(e){e.preventDefault();window.print();});}'
 	. '});';
