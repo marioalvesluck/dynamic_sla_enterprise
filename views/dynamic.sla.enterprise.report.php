@@ -433,6 +433,11 @@ $html_page = (new CHtmlPage())
 	->setTitle(_('Inteligence Enterprise Report'))
 	->setDocUrl('');
 
+$report_css_path = dirname(__FILE__).'/../assets/css/report.css';
+if (is_readable($report_css_path)) {
+	$html_page->addItem(new CTag('style', true, (string) file_get_contents($report_css_path)));
+}
+
 $js = 'document.addEventListener("DOMContentLoaded",function(){'
 	. 'document.body.classList.add("dse-rpt-print-report");'
 	. 'var b=document.getElementById("dse-rpt-print");'

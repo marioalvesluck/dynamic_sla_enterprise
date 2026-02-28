@@ -287,3 +287,42 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+@media print {
+	#dse-generate-report,
+	#dse-quick-print,
+	#dse-report-persona,
+	#dse-clear-cache,
+	#dse-save-view,
+	#dse-export-views,
+	#dse-import-views,
+	#go_problems,
+	#dse-refresh-options,
+	#dse-run {
+		display: none !important;
+	}
+
+	body,
+	.mnz-dse-wrapper,
+	.mnz-dse-inner-sheet,
+	.mnz-dse-panel,
+	.mnz-dse-inner-card,
+	.mnz-dse-kpi,
+	.mnz-dse-section-title,
+	.mnz-dse-label,
+	.list-table,
+	.list-table th,
+	.list-table td {
+		background: #fff !important;
+		color: #0f172a !important;
+		border-color: #d7e1ee !important;
+		box-shadow: none !important;
+	}
+
+	.mnz-dse-panel,
+	.mnz-dse-kpi,
+	.mnz-dse-table-wrap {
+		break-inside: avoid;
+		page-break-inside: avoid;
+	}
+}
