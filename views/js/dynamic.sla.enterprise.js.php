@@ -16,8 +16,10 @@ jQuery(function() {
 	var CACHE_TTL_CALC = 120 * 1000;
 	var CACHE_KEYS = {
 		options: CACHE_NS + '_options',
-		calc: CACHE_NS + '_calc'
+		calc: CACHE_NS + '_calc',
+		savedViews: CACHE_NS + '_saved_views'
 	};
+	var activeSavedViewId = null;
 
 	function fmtDateInput(ts) {
 		var dt = new Date(ts * 1000);
@@ -119,6 +121,155 @@ jQuery(function() {
 			data: data || {}
 		};
 		writeStorageJson(storeKey, cache);
+	}
+
+	function getSavedViews() {
+		var views = readStorageJson(CACHE_KEYS.savedViews, []);
+		return Array.isArray(views) ? views : [];
+	}
+
+	function setSavedViews(views) {
+		writeStorageJson(CACHE_KEYS.savedViews, Array.isArray(views) ? views : []);
+	}
+
+	function toStringArray(values) {
+		if (!Array.isArray(values)) {
+			return [];
+		}
+		return values.map(function(v) { return String(v); }).filter(function(v) { return v !== ''; });
+	}
+
+	function setSelectValues(id, values) {
+		var vals = toStringArray(values);
+		jQuery(id).val(vals);
+		if (jQuery(id).data('mnz-ms-init')) {
+			rebuildMsOptions(id);
+			updateMsToggle(id);
+		}
+	}
+
+	function captureCurrentViewState() {
+		return {
+			groupids: toStringArray(jQuery('#dse-groupids').val() || []),
+			hostids: toStringArray(jQuery('#dse-hostids').val() || []),
+			triggerids: toStringArray(jQuery('#dse-triggerids').val() || []),
+			exclude_triggerids: String(jQuery('#dse-exclude-triggerids').val() || ''),
+			impact_level: String(jQuery('#dse-impact-level').val() || 'all'),
+			period: String(jQuery('#dse-period').val() || '30d'),
+			from: String(jQuery('#dse-from').val() || ''),
+			to: String(jQuery('#dse-to').val() || ''),
+			business_mode: String(jQuery('#dse-business-mode').val() || 'business_mf_8_18'),
+			business_start: String(jQuery('#dse-business-start').val() || '08:00'),
+			business_end: String(jQuery('#dse-business-end').val() || '18:00'),
+			exclude_maintenance: jQuery('#dse-exclude-maintenance').is(':checked') ? 1 : 0,
+			slo_target: String(jQuery('#dse-slo-target').val() || '99.9'),
+			persona: String(jQuery('#dse-report-persona').val() || 'noc')
+		};
+	}
+
+	function renderSavedViews() {
+		var views = getSavedViews();
+		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-panel-head"><div class="mnz-dse-section-title">Saved views</div></div>';
+		if (!views.length) {
+			html += '<div class="mnz-dse-empty">No saved views yet.</div></div>';
+			jQuery('#dse-saved-views').html(html);
+			return;
+		}
+
+		html += '<div class="mnz-dse-saved-tabs">';
+		views.forEach(function(view) {
+			var id = String(view.id || '');
+			var name = String(view.name || 'View');
+			var active = (activeSavedViewId && activeSavedViewId === id) ? ' is-active' : '';
+			html += '<div class="mnz-dse-saved-tab-wrap">' +
+				'<button type="button" class="btn-alt mnz-dse-saved-tab' + active + '" data-view-id="' + escapeHtml(id) + '">' + escapeHtml(name) + '</button>' +
+				'<button type="button" class="btn-alt mnz-dse-saved-del" title="Delete view" data-view-del="' + escapeHtml(id) + '">x</button>' +
+			'</div>';
+		});
+		html += '</div></div>';
+		jQuery('#dse-saved-views').html(html);
+	}
+
+	function saveCurrentView() {
+		var name = String(jQuery('#dse-save-view-name').val() || '').trim();
+		if (!name) {
+			setStatus('Type a view name before Save as.', 'error');
+			return;
+		}
+
+		var views = getSavedViews();
+		var state = captureCurrentViewState();
+		var lowered = name.toLowerCase();
+		var found = -1;
+		for (var i = 0; i < views.length; i++) {
+			if (String(views[i].name || '').toLowerCase() === lowered) {
+				found = i;
+				break;
+			}
+		}
+
+		if (found >= 0) {
+			views[found].state = state;
+			views[found].updated_at = Date.now();
+			activeSavedViewId = String(views[found].id || '');
+		}
+		else {
+			var newId = String(Date.now()) + '_' + String(Math.floor(Math.random() * 100000));
+			views.push({
+				id: newId,
+				name: name,
+				state: state,
+				created_at: Date.now()
+			});
+			activeSavedViewId = newId;
+		}
+
+		setSavedViews(views);
+		renderSavedViews();
+		setStatus('View saved: ' + name, 'ok');
+	}
+
+	function applySavedView(viewId) {
+		var views = getSavedViews();
+		var view = null;
+		for (var i = 0; i < views.length; i++) {
+			if (String(views[i].id || '') === String(viewId)) {
+				view = views[i];
+				break;
+			}
+		}
+		if (!view || !view.state) {
+			setStatus('Saved view not found.', 'error');
+			return;
+		}
+
+		var state = view.state;
+		activeSavedViewId = String(view.id || '');
+		jQuery('#dse-save-view-name').val(String(view.name || ''));
+		jQuery('#dse-report-persona').val(String(state.persona || 'noc'));
+		jQuery('#dse-exclude-triggerids').val(String(state.exclude_triggerids || ''));
+		jQuery('#dse-impact-level').val(String(state.impact_level || 'all'));
+		jQuery('#dse-period').val(String(state.period || '30d'));
+		jQuery('#dse-from').val(String(state.from || ''));
+		jQuery('#dse-to').val(String(state.to || ''));
+		jQuery('#dse-business-mode').val(String(state.business_mode || 'business_mf_8_18'));
+		jQuery('#dse-business-start').val(String(state.business_start || '08:00'));
+		jQuery('#dse-business-end').val(String(state.business_end || '18:00'));
+		jQuery('#dse-exclude-maintenance').prop('checked', Number(state.exclude_maintenance || 0) === 1);
+		jQuery('#dse-slo-target').val(String(state.slo_target || '99.9'));
+		applyPeriodPreset();
+
+		setSelectValues('#dse-groupids', state.groupids || []);
+		renderSavedViews();
+
+		removeStorageKeys();
+		loadOptions('groups', true).always(function() {
+			setSelectValues('#dse-hostids', state.hostids || []);
+			loadOptions('hosts', true).always(function() {
+				setSelectValues('#dse-triggerids', state.triggerids || []);
+				run(true);
+			});
+		});
 	}
 
 	function isUsableCalcCache(data) {
@@ -651,7 +802,7 @@ jQuery(function() {
 		}
 	}
 
-	function loadOptions(triggeredBy) {
+	function loadOptions(triggeredBy, forceFresh) {
 		if (!hasSelectedGroups() && triggeredBy !== 'init' && triggeredBy !== 'groups') {
 			setResultsCollapsed(true);
 			clearDependentSelectors();
@@ -674,7 +825,7 @@ jQuery(function() {
 		var selectedHosts = jQuery('#dse-hostids').val() || [];
 		var selectedTriggers = jQuery('#dse-triggerids').val() || [];
 
-		var cached = getCachedResponse(CACHE_KEYS.options, payload, CACHE_TTL_OPTIONS);
+		var cached = !forceFresh ? getCachedResponse(CACHE_KEYS.options, payload, CACHE_TTL_OPTIONS) : null;
 		if (cached && cached.groups && cached.hosts && cached.triggers) {
 			applyOptionsData(cached, selectedGroups, selectedHosts, selectedTriggers, triggeredBy, 'cache:hit');
 			return jQuery.Deferred().resolve().promise();
@@ -1185,7 +1336,7 @@ jQuery(function() {
 		document.body.removeChild(form);
 	}
 
-	function run() {
+	function run(forceFresh) {
 		if (!hasSelectedGroups()) {
 			setResultsCollapsed(true);
 			setStatus('Select at least one Host group to calculate SLA.', 'error');
@@ -1199,7 +1350,7 @@ jQuery(function() {
 
 		var payload = buildBasePayload();
 		payload.mode = 'calculate';
-		var cached = getCachedResponse(CACHE_KEYS.calc, payload, CACHE_TTL_CALC);
+		var cached = !forceFresh ? getCachedResponse(CACHE_KEYS.calc, payload, CACHE_TTL_CALC) : null;
 		if (isUsableCalcCache(cached)) {
 			lastCalculatedData = cached;
 			renderExecutive(cached);
@@ -1305,6 +1456,35 @@ jQuery(function() {
 	jQuery('#dse-clear-cache').on('click', function(e) {
 		e.preventDefault();
 		clearAllCache();
+	});
+	jQuery('#dse-save-view').on('click', function(e) {
+		e.preventDefault();
+		saveCurrentView();
+	});
+	jQuery('#dse-save-view-name').on('keydown', function(e) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			saveCurrentView();
+		}
+	});
+	jQuery(document).on('click', '.mnz-dse-saved-tab', function(e) {
+		e.preventDefault();
+		applySavedView(String(jQuery(this).data('view-id') || ''));
+	});
+	jQuery(document).on('click', '.mnz-dse-saved-del', function(e) {
+		e.preventDefault();
+		e.stopPropagation();
+		var id = String(jQuery(this).data('view-del') || '');
+		if (!id) {
+			return;
+		}
+		var views = getSavedViews().filter(function(v) { return String(v.id || '') !== id; });
+		if (activeSavedViewId === id) {
+			activeSavedViewId = null;
+		}
+		setSavedViews(views);
+		renderSavedViews();
+		setStatus('Saved view removed.', 'ok');
 	});
 	jQuery(document).on('click', '.mnz-dse-exclude-btn', function() {
 		appendExcludedTrigger(jQuery(this).data('triggerid'));
@@ -1420,6 +1600,7 @@ jQuery(function() {
 	});
 	applyPeriodPreset();
 	setupMultiSelects();
+	renderSavedViews();
 	setResultsCollapsed(true);
 	setStatus('Select at least one Host group to enable calculation.', 'ok');
 	loadOptions('init').always(function() {

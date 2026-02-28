@@ -60,6 +60,13 @@
 	color: #e5e7eb;
 }
 
+[theme="dark-theme"] .mnz-dse-top-input,
+[theme="hc-dark"] .mnz-dse-top-input {
+	background: #363636;
+	border-color: rgba(255, 255, 255, 0.2);
+	color: #e5e7eb;
+}
+
 [theme="dark-theme"] .mnz-dse-ms-toggle,
 [theme="hc-dark"] .mnz-dse-ms-toggle {
 	background: #363636;
@@ -119,6 +126,20 @@
 	background: #0284c7;
 	border-color: #0284c7;
 	color: #fff;
+}
+
+[theme="dark-theme"] .mnz-dse-saved-tab.is-active,
+[theme="hc-dark"] .mnz-dse-saved-tab.is-active {
+	background: #0284c7;
+	border-color: #0284c7;
+	color: #fff;
+}
+
+[theme="dark-theme"] .mnz-dse-saved-del,
+[theme="hc-dark"] .mnz-dse-saved-del {
+	background: #1f2937;
+	border-color: rgba(255, 255, 255, 0.2);
+	color: #e5e7eb;
 }
 
 [theme="dark-theme"] .mnz-dse-gap-good,

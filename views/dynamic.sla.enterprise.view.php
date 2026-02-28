@@ -33,6 +33,17 @@ $html_page = (new CHtmlPage())
 						->addClass(ZBX_STYLE_BTN_ALT)
 				)
 				->addItem(
+					(new CTextBox('dse-save-view-name', ''))
+						->setId('dse-save-view-name')
+						->setAttribute('placeholder', _('View name'))
+						->addClass('mnz-dse-top-input')
+				)
+				->addItem(
+					(new CButton('dse-save-view', _('Save as')))
+						->setId('dse-save-view')
+						->addClass(ZBX_STYLE_BTN_ALT)
+				)
+				->addItem(
 					(new CButton('go_problems', _('Back to Problems')))
 						->setAttribute('onclick', "location.href='zabbix.php?action=problem.view'")
 				)
@@ -41,6 +52,7 @@ $html_page = (new CHtmlPage())
 
 $content = (new CDiv())->addClass('mnz-dse-wrapper');
 $sheet = (new CDiv())->addClass('mnz-dse-inner-sheet');
+$sheet->addItem((new CDiv())->setId('dse-saved-views')->addClass('mnz-dse-saved-views'));
 
 $filters = (new CDiv([
 	(new CDiv([

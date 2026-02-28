@@ -9,6 +9,40 @@
 	padding: 14px;
 }
 
+.mnz-dse-top-input {
+	min-width: 180px;
+	height: 32px;
+}
+
+.mnz-dse-saved-views {
+	margin-bottom: 12px;
+}
+
+.mnz-dse-saved-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.mnz-dse-saved-tab-wrap {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.mnz-dse-saved-tab.is-active {
+	background: #0284c7;
+	border-color: #0284c7;
+	color: #fff;
+}
+
+.mnz-dse-saved-del {
+	min-width: 26px;
+	height: 26px;
+	padding: 0 6px;
+	line-height: 1;
+}
+
 .mnz-dse-title {
 	margin: 0 0 12px;
 	font-size: 24px;
