@@ -47,14 +47,27 @@ class CControllerDynamicSlaEnterpriseReport extends CController {
 			}
 		}
 
+		$generated_at_ts = time();
+		$seed = json_encode([
+			'persona' => $persona,
+			'payload' => $report_data,
+			'generated_at' => $generated_at_ts
+		]);
+		$report_id = strtoupper(substr(hash('sha256', (string) $seed), 0, 12));
+
 		$response = new CControllerResponseData([
 			'persona' => $persona,
 			'auto_print' => $auto_print,
 			'report' => $report_data,
-			'generated_at' => date('Y-m-d H:i:s')
+			'generated_at' => date('Y-m-d H:i:s', $generated_at_ts),
+			'meta' => [
+				'report_id' => $report_id,
+				'timezone' => date_default_timezone_get(),
+				'author' => 'NOC',
+				'environment' => 'Production'
+			]
 		]);
 		$response->setTitle(_('Dynamic SLA Enterprise Report'));
 		$this->setResponse($response);
 	}
 }
-
