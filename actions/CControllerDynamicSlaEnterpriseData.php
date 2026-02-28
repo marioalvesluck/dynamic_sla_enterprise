@@ -367,8 +367,25 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		$mttr_seconds = $mttr_samples ? (int) round(array_sum($mttr_samples) / max(1, count($mttr_samples))) : 0;
 
 		arsort($per_trigger_downtime);
+		$impact_map = $this->buildDependencyImpactMap(array_map('intval', array_keys($per_trigger_downtime)));
+		$host_impact_map = [];
 		$top_triggers = [];
 		foreach (array_slice($per_trigger_downtime, 0, 12, true) as $tid => $seconds) {
+			$impact = (int) ($impact_map[$tid]['risk_score'] ?? 0);
+			$host_name = (string) ($trigger_map[$tid]['host'] ?? '-');
+			if ($host_name !== '' && $host_name !== '-') {
+				if (!isset($host_impact_map[$host_name])) {
+					$host_impact_map[$host_name] = [
+						'host' => $host_name,
+						'impact' => 0,
+						'triggers' => 0,
+						'downtime_seconds' => 0
+					];
+				}
+				$host_impact_map[$host_name]['impact'] += $impact;
+				$host_impact_map[$host_name]['triggers']++;
+				$host_impact_map[$host_name]['downtime_seconds'] += (int) $seconds;
+			}
 			$top_triggers[] = [
 				'triggerid' => (int) $tid,
 				'name' => $trigger_map[$tid]['name'] ?? _s('Trigger %1$s', (string) $tid),
@@ -376,10 +393,23 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'start' => (int) ($per_trigger_last_start[$tid] ?? 0),
 				'severity' => (int) ($trigger_map[$tid]['severity'] ?? 0),
 				'severity_label' => $this->severityName((int) ($trigger_map[$tid]['severity'] ?? 0)),
+				'impact' => $impact,
+				'impact_formula' => (string) ($impact_map[$tid]['risk_formula'] ?? ''),
 				'downtime_seconds' => (int) $seconds,
 				'downtime' => $this->fmtDuration((int) $seconds)
 			];
 		}
+		$hosts_impact = array_values($host_impact_map);
+		usort($hosts_impact, static function(array $a, array $b): int {
+			if ((int) $a['impact'] === (int) $b['impact']) {
+				if ((int) $a['triggers'] === (int) $b['triggers']) {
+					return ((int) $b['downtime_seconds']) <=> ((int) $a['downtime_seconds']);
+				}
+				return ((int) $b['triggers']) <=> ((int) $a['triggers']);
+			}
+			return ((int) $b['impact']) <=> ((int) $a['impact']);
+		});
+		$hosts_impact = array_slice($hosts_impact, 0, 8);
 
 		usort($timeline_rows, static function(array $a, array $b): int {
 			return $b['start'] <=> $a['start'];
@@ -433,6 +463,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'services_impacted' => count($top_triggers)
 			],
 			'top_triggers' => $top_triggers,
+			'hosts_impact' => $hosts_impact,
 			'daily' => $daily,
 			'heatmap' => $heatmap,
 			'timeline' => $timeline_limited,
@@ -862,6 +893,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'services_impacted' => 0
 			],
 			'top_triggers' => [],
+			'hosts_impact' => [],
 			'daily' => [],
 			'heatmap' => [
 				'week_labels' => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
@@ -870,6 +902,86 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			],
 			'timeline' => []
 		];
+	}
+
+	private function buildDependencyImpactMap(array $triggerids): array {
+		$triggerids = array_values(array_unique(array_map('intval', $triggerids)));
+		if (!$triggerids) {
+			return [];
+		}
+
+		$triggers = API::Trigger()->get([
+			'output' => ['triggerid', 'priority', 'value'],
+			'selectDependencies' => ['triggerid'],
+			'preservekeys' => true,
+			'triggerids' => $triggerids
+		]);
+		if (!$triggers) {
+			return [];
+		}
+
+		$children_map = [];
+		foreach ($triggers as $id => $trigger) {
+			$children_map[(int) $id] = [];
+		}
+
+		foreach ($triggers as $id => $trigger) {
+			$child_id = (int) $id;
+			foreach (($trigger['dependencies'] ?? []) as $dep) {
+				$parent_id = (int) ($dep['triggerid'] ?? 0);
+				if ($parent_id > 0 && isset($children_map[$parent_id])) {
+					$children_map[$parent_id][] = $child_id;
+				}
+			}
+		}
+
+		$parents_in_scope = [];
+		$children_count = [];
+		foreach (array_keys($triggers) as $id) {
+			$tid = (int) $id;
+			$parents_in_scope[$tid] = 0;
+			$children_count[$tid] = count(array_unique($children_map[$tid] ?? []));
+		}
+
+		foreach ($triggers as $id => $trigger) {
+			foreach (($trigger['dependencies'] ?? []) as $dep) {
+				$parent_id = (int) ($dep['triggerid'] ?? 0);
+				$child_id = (int) $id;
+				if ($parent_id > 0 && isset($triggers[(string) $parent_id], $parents_in_scope[$child_id])) {
+					$parents_in_scope[$child_id]++;
+				}
+			}
+		}
+
+		$weights = [1, 2, 3, 5, 8, 13];
+		$out = [];
+		foreach ($triggers as $id => $trigger) {
+			$tid = (int) $id;
+			$severity = (int) ($trigger['priority'] ?? 0);
+			$is_problem = ((int) ($trigger['value'] ?? 0) === TRIGGER_VALUE_TRUE);
+			$is_root = (($parents_in_scope[$tid] ?? 0) === 0);
+			$fanout = (int) ($children_count[$tid] ?? 0);
+
+			$severity_part = (int) ($weights[$severity] ?? 1);
+			$problem_part = $is_problem ? 8 : 0;
+			$fanout_part = min(20, $fanout * 2);
+			$root_bonus = ($is_root && $severity >= 4) ? 4 : 0;
+			$risk = $severity_part + $problem_part + $fanout_part + $root_bonus;
+
+			$out[$tid] = [
+				'risk_score' => $risk,
+				'risk_formula' => sprintf(
+					'severity(%d) + problem(%d) + fanout(%d) + root_bonus(%d) = %d',
+					$severity_part,
+					$problem_part,
+					$fanout_part,
+					$root_bonus,
+					$risk
+				)
+			];
+		}
+
+		return $out;
 	}
 
 

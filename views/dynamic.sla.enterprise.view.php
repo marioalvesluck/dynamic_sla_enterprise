@@ -129,6 +129,7 @@ $content->addItem((new CDiv())->setId('dse-summary')->addClass('mnz-dse-summary'
 $content->addItem((new CDiv())->setId('dse-insights')->addClass('mnz-dse-insights'));
 $content->addItem((new CDiv())->setId('dse-daily')->addClass('mnz-dse-daily'));
 $content->addItem((new CDiv())->setId('dse-heatmap')->addClass('mnz-dse-heatmap'));
+$content->addItem((new CDiv())->setId('dse-host-impact')->addClass('mnz-dse-host-impact'));
 $content->addItem((new CDiv())->setId('dse-top-triggers')->addClass('mnz-dse-top-triggers'));
 $content->addItem((new CDiv())->setId('dse-timeline')->addClass('mnz-dse-timeline'));
 

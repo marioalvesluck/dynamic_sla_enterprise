@@ -158,3 +158,19 @@
 [theme="hc-dark"] .mnz-dse-sev-4 { background: rgba(233, 118, 89, 0.28); color: #fca5a5; }
 [theme="dark-theme"] .mnz-dse-sev-5,
 [theme="hc-dark"] .mnz-dse-sev-5 { background: rgba(228, 89, 89, 0.32); color: #fecaca; }
+
+[theme="dark-theme"] .mnz-dse-impact-val,
+[theme="dark-theme"] .mnz-dse-hostimpact-name,
+[theme="dark-theme"] .mnz-dse-hostimpact-val,
+[theme="hc-dark"] .mnz-dse-impact-val,
+[theme="hc-dark"] .mnz-dse-hostimpact-name,
+[theme="hc-dark"] .mnz-dse-hostimpact-val {
+	color: #e5e7eb;
+}
+
+[theme="dark-theme"] .mnz-dse-impact-bar,
+[theme="dark-theme"] .mnz-dse-hostimpact-bar,
+[theme="hc-dark"] .mnz-dse-impact-bar,
+[theme="hc-dark"] .mnz-dse-hostimpact-bar {
+	background: #334155;
+}

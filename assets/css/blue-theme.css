@@ -497,6 +497,78 @@
 .mnz-dse-sev-4 { background: rgba(233, 118, 89, 0.22); color: #b91c1c; }
 .mnz-dse-sev-5 { background: rgba(228, 89, 89, 0.22); color: #991b1b; }
 
+.mnz-dse-impact-wrap {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 112px;
+}
+
+.mnz-dse-impact-val {
+	font-weight: 700;
+	font-size: 12px;
+	color: #334155;
+	min-width: 22px;
+	text-align: right;
+}
+
+.mnz-dse-impact-bar {
+	display: inline-block;
+	width: 72px;
+	height: 8px;
+	border-radius: 999px;
+	background: #e2e8f0;
+	overflow: hidden;
+}
+
+.mnz-dse-impact-fill {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: linear-gradient(90deg, #0ea5e9 0%, #22c55e 100%);
+}
+
+.mnz-dse-hostimpact-list {
+	display: grid;
+	gap: 8px;
+}
+
+.mnz-dse-hostimpact-row {
+	display: grid;
+	grid-template-columns: 240px 1fr 54px;
+	gap: 10px;
+	align-items: center;
+}
+
+.mnz-dse-hostimpact-name {
+	font-size: 16px;
+	color: #0f172a;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.mnz-dse-hostimpact-bar {
+	display: block;
+	height: 8px;
+	border-radius: 999px;
+	background: #e2e8f0;
+	overflow: hidden;
+}
+
+.mnz-dse-hostimpact-fill {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: linear-gradient(90deg, #1d4ed8 0%, #22c55e 100%);
+}
+
+.mnz-dse-hostimpact-val {
+	text-align: right;
+	font-weight: 700;
+	color: #0f172a;
+}
+
 @media (max-width: 1280px) {
 	.mnz-dse-filters {
 		grid-template-columns: repeat(2, minmax(0, 1fr));

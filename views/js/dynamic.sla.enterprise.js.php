@@ -62,7 +62,7 @@ jQuery(function() {
 	}
 
 	function setResultsCollapsed(collapsed) {
-		var ids = ['#dse-exec', '#dse-summary', '#dse-insights', '#dse-daily', '#dse-heatmap', '#dse-top-triggers', '#dse-timeline'];
+		var ids = ['#dse-exec', '#dse-summary', '#dse-insights', '#dse-daily', '#dse-heatmap', '#dse-host-impact', '#dse-top-triggers', '#dse-timeline'];
 		ids.forEach(function(id) {
 			if (collapsed) {
 				jQuery(id).hide().empty();
@@ -806,21 +806,60 @@ jQuery(function() {
 			jQuery('#dse-top-triggers').html('<div class="mnz-dse-panel"><div class="mnz-dse-empty">' + (d.noDataLabel || 'No data') + '</div></div>');
 			return;
 		}
-		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Top triggers by downtime</div><table class="list-table"><thead><tr><th>Trigger ID</th><th>Host</th><th>Name</th><th>Start time</th><th>Severity</th><th>Downtime</th><th>Action</th></tr></thead><tbody>';
+		var maxImpact = 1;
+		rows.forEach(function(row) {
+			var impact = Number(row.impact || 0);
+			if (isFinite(impact) && impact > maxImpact) {
+				maxImpact = impact;
+			}
+		});
+
+		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Top triggers by downtime</div><table class="list-table"><thead><tr><th>Trigger ID</th><th>Host</th><th>Name</th><th>Start time</th><th>Severity</th><th>Impact</th><th>Downtime</th><th>Action</th></tr></thead><tbody>';
 		rows.forEach(function(row) {
 			var start = row.start ? new Date(row.start * 1000).toLocaleString() : '-';
+			var impact = Number(row.impact || 0);
+			var pct = Math.max(4, Math.min(100, Math.round((impact / Math.max(1, maxImpact)) * 100)));
+			var impactTip = String(row.impact_formula || '').replace(/"/g, '&quot;');
 			html += '<tr>' +
 				'<td>' + row.triggerid + '</td>' +
 				'<td>' + String(row.host || '-').replace(/</g, '&lt;') + '</td>' +
 				'<td>' + String(row.name || '').replace(/</g, '&lt;') + '</td>' +
 				'<td>' + start + '</td>' +
 				'<td><span class="mnz-dse-sev ' + severityBadgeClass(row.severity) + '">' + String(row.severity_label || '-').replace(/</g, '&lt;') + '</span></td>' +
+				'<td><div class="mnz-dse-impact-wrap" title="' + impactTip + '"><span class="mnz-dse-impact-val">' + Math.round(impact) + '</span><span class="mnz-dse-impact-bar"><span class="mnz-dse-impact-fill" style="width:' + pct + '%"></span></span></div></td>' +
 				'<td>' + String(row.downtime || '-') + '</td>' +
 				'<td><button type="button" class="btn-alt mnz-dse-exclude-btn" data-triggerid="' + row.triggerid + '">Exclude</button></td>' +
 			'</tr>';
 		});
 		html += '</tbody></table></div>';
 		jQuery('#dse-top-triggers').html(html);
+	}
+
+	function renderHostsImpact(data) {
+		var rows = Array.isArray(data.hosts_impact) ? data.hosts_impact : [];
+		if (!rows.length) {
+			jQuery('#dse-host-impact').html('<div class="mnz-dse-panel"><div class="mnz-dse-empty">' + (d.noDataLabel || 'No data') + '</div></div>');
+			return;
+		}
+
+		var maxImpact = rows.reduce(function(max, row) {
+			var v = Number(row.impact || 0);
+			return isFinite(v) && v > max ? v : max;
+		}, 1);
+
+		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Top hosts by impact</div><div class="mnz-dse-hostimpact-list">';
+		rows.forEach(function(row) {
+			var impact = Number(row.impact || 0);
+			var pct = Math.max(2, Math.round((impact / Math.max(1, maxImpact)) * 100));
+			var tip = 'Impact: ' + Math.round(impact) + ' | Triggers: ' + Number(row.triggers || 0) + ' | Downtime: ' + fmtDownShort(Number(row.downtime_seconds || 0));
+			html += '<div class="mnz-dse-hostimpact-row" title="' + tip.replace(/"/g, '&quot;') + '">' +
+				'<span class="mnz-dse-hostimpact-name">' + String(row.host || '-').replace(/</g, '&lt;') + '</span>' +
+				'<span class="mnz-dse-hostimpact-bar"><span class="mnz-dse-hostimpact-fill" style="width:' + pct + '%"></span></span>' +
+				'<span class="mnz-dse-hostimpact-val">' + Math.round(impact) + '</span>' +
+			'</div>';
+		});
+		html += '</div></div>';
+		jQuery('#dse-host-impact').html(html);
 	}
 
 	function renderTimeline(data) {
@@ -900,6 +939,7 @@ jQuery(function() {
 			renderInsights(res.data);
 			renderDaily(res.data);
 			renderHeatmap(res.data);
+			renderHostsImpact(res.data);
 			renderTopTriggers(res.data);
 			renderTimeline(res.data);
 			setStatus((res.data && res.data.note) ? res.data.note : 'SLA calculation finished', (res.data && res.data.note) ? 'error' : 'ok');
