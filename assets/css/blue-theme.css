@@ -378,6 +378,16 @@
 	border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
+.mnz-dse-heatmap-cell.mnz-dse-heatmap-hit-1 {
+	background: #22c55e;
+	color: #ffffff;
+}
+
+.mnz-dse-heatmap-cell.mnz-dse-heatmap-hit-2 {
+	background: #dc2626;
+	color: #ffffff;
+}
+
 .mnz-dse-status-good {
 	color: #15803d;
 	font-weight: 700;

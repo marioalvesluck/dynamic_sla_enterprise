@@ -314,6 +314,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 
 		$downtime_intervals = [];
 		$per_trigger_downtime = [];
+		$per_trigger_last_start = [];
 		$timeline_rows = [];
 		foreach ($incidents as $incident) {
 			$overlaps = $this->intersectLists([['s' => $incident['s'], 'e' => $incident['e']]], $denominator_intervals);
@@ -328,6 +329,10 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 
 			$tid = (int) $incident['triggerid'];
 			$per_trigger_downtime[$tid] = ($per_trigger_downtime[$tid] ?? 0) + $effective;
+			$start_ts = (int) $incident['s'];
+			if (!isset($per_trigger_last_start[$tid]) || $start_ts > $per_trigger_last_start[$tid]) {
+				$per_trigger_last_start[$tid] = $start_ts;
+			}
 
 			$timeline_rows[] = [
 				'triggerid' => $tid,
@@ -360,6 +365,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'triggerid' => (int) $tid,
 				'name' => $trigger_map[$tid]['name'] ?? _s('Trigger %1$s', (string) $tid),
 				'host' => $trigger_map[$tid]['host'] ?? '-',
+				'start' => (int) ($per_trigger_last_start[$tid] ?? 0),
 				'severity' => (int) ($trigger_map[$tid]['severity'] ?? 0),
 				'severity_label' => $this->severityName((int) ($trigger_map[$tid]['severity'] ?? 0)),
 				'downtime_seconds' => (int) $seconds,

@@ -111,6 +111,53 @@ jQuery(function() {
 		return 'mnz-dse-sev-' + sev;
 	}
 
+	function incidentTooltipLines(label, incidents) {
+		if (!incidents || !incidents.length) {
+			return label + '\nIncidents: 0';
+		}
+
+		var lines = [label + '\nIncidents: ' + incidents.length];
+		var maxLines = 8;
+		for (var i = 0; i < incidents.length && i < maxLines; i++) {
+			var it = incidents[i] || {};
+			var when = it.start ? new Date(it.start * 1000).toLocaleString() : '-';
+			lines.push(
+				'- ' + String(it.host || '-') +
+				' | ' + String(it.trigger_name || '-') +
+				' | ' + String(it.severity_label || '-') +
+				' | ' + when
+			);
+		}
+		if (incidents.length > maxLines) {
+			lines.push('+ ' + (incidents.length - maxLines) + ' more...');
+		}
+		return lines.join('\n');
+	}
+
+	function forEachOverlappedHour(startTs, endTs, windowStart, windowEnd, cb) {
+		var s = Number(startTs || 0);
+		var e = Number(endTs || 0);
+		var ws = Number(windowStart || 0);
+		var we = Number(windowEnd || 0);
+		if (!isFinite(s) || !isFinite(e) || !isFinite(ws) || !isFinite(we)) {
+			return;
+		}
+		s = Math.max(s, ws);
+		e = Math.min(e, we);
+		if (e <= s) {
+			return;
+		}
+
+		var bucket = Math.floor(s / 3600) * 3600;
+		while (bucket < e) {
+			var bucketEnd = bucket + 3600;
+			if (bucketEnd > s && bucket < e) {
+				cb(bucket);
+			}
+			bucket = bucketEnd;
+		}
+	}
+
 	function escapeHtml(v) {
 		return String(v == null ? '' : v)
 			.replace(/&/g, '&amp;')
@@ -479,64 +526,126 @@ jQuery(function() {
 	}
 
 	function renderDaily(data) {
-		var arr = Array.isArray(data.daily) ? data.daily : [];
-		if (!arr.length) {
-			jQuery('#dse-daily').html('<div class="mnz-dse-panel"><div class="mnz-dse-empty">' + (d.noDataLabel || 'No data') + '</div></div>');
-			return;
+		var rows = Array.isArray(data.timeline) ? data.timeline : [];
+		var toTs = Number((data.summary && data.summary.window_to) || Math.floor(Date.now() / 1000));
+		if (!isFinite(toTs) || toTs <= 0) {
+			toTs = Math.floor(Date.now() / 1000);
 		}
-		var maxDown = 1;
-		arr.forEach(function(row) {
-			if ((row.downtime_seconds || 0) > maxDown) {
-				maxDown = row.downtime_seconds || 0;
+		var fromTs = toTs - (24 * 3600);
+		var counts = [];
+		var details = [];
+		for (var i = 0; i < 24; i++) {
+			counts.push(0);
+			details.push([]);
+		}
+
+		rows.forEach(function(row) {
+			var start = Number(row.start || 0);
+			var end = Number(row.end || 0);
+			if (!isFinite(end) || end <= 0) {
+				end = toTs;
+			}
+			forEachOverlappedHour(start, end, fromTs, toTs, function(bucketTs) {
+				var idx = Math.floor((bucketTs - fromTs) / 3600);
+				idx = Math.max(0, Math.min(23, idx));
+				counts[idx] += 1;
+				details[idx].push(row);
+			});
+		});
+
+		var maxCount = 0;
+		counts.forEach(function(v) {
+			if (v > maxCount) {
+				maxCount = v;
 			}
 		});
 
+		if (maxCount <= 0) {
+			jQuery('#dse-daily').html('<div class="mnz-dse-panel"><div class="mnz-dse-empty">' + (d.noDataLabel || 'No data') + '</div></div>');
+			return;
+		}
+
 		var bars = '<div class="mnz-dse-daily-bars">';
-		arr.forEach(function(row) {
-			var h = Math.max(4, ((row.downtime_seconds || 0) / maxDown) * 88);
-			bars += '<div class="mnz-dse-bar-item" title="' + row.date + ' | Avail: ' + fmtPct(row.availability) + ' | Down: ' + (row.downtime_seconds || 0) + 's">' +
-				'<span class="mnz-dse-bar-val">' + fmtDownShort(row.downtime_seconds || 0) + '</span>' +
+		for (var hour = 0; hour < 24; hour++) {
+			var c = counts[hour];
+			var ts = fromTs + (hour * 3600);
+			var dt = new Date(ts * 1000);
+			var lbl = String(dt.getHours()).padStart(2, '0') + ':00';
+			var h = Math.max(4, (c / maxCount) * 88);
+			var tip = incidentTooltipLines(lbl, details[hour]).replace(/"/g, '&quot;');
+			bars += '<div class="mnz-dse-bar-item" title="' + tip + '">' +
+				'<span class="mnz-dse-bar-val">' + c + '</span>' +
 				'<div class="mnz-dse-bar" style="height:' + h + 'px"></div>' +
-				'<span class="mnz-dse-bar-lbl">' + String(row.date || '').slice(5) + '</span>' +
+				'<span class="mnz-dse-bar-lbl">' + lbl + '</span>' +
 			'</div>';
-		});
+		}
 		bars += '</div>';
-		jQuery('#dse-daily').html('<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Daily distribution</div>' + bars + '</div>');
+		jQuery('#dse-daily').html('<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Daily distribution (last 24h active incidents)</div>' + bars + '</div>');
 	}
 
 	function renderHeatmap(data) {
-		var hm = data.heatmap || {};
-		var matrix = hm.matrix || [];
-		if (!matrix.length) {
+		var rows = Array.isArray(data.timeline) ? data.timeline : [];
+		var fromTs = Number((data.summary && data.summary.window_from) || 0);
+		var toTs = Number((data.summary && data.summary.window_to) || Math.floor(Date.now() / 1000));
+		if (!isFinite(fromTs) || fromTs <= 0 || !isFinite(toTs) || toTs <= fromTs) {
+			fromTs = toTs - (30 * 86400);
+		}
+		if (!rows.length) {
 			jQuery('#dse-heatmap').html('<div class="mnz-dse-panel"><div class="mnz-dse-empty">' + (d.noDataLabel || 'No data') + '</div></div>');
 			return;
 		}
 
-		var max = 0;
-		for (var w = 0; w < matrix.length; w++) {
-			for (var h = 0; h < matrix[w].length; h++) {
-				if (matrix[w][h] > max) {
-					max = matrix[w][h];
-				}
+		var weekLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+		var hourLabels = [];
+		for (var h = 0; h < 24; h++) {
+			hourLabels.push(h + 'h');
+		}
+		var matrix = [];
+		var matrixDetails = [];
+		for (var w = 0; w < 7; w++) {
+			matrix[w] = [];
+			matrixDetails[w] = [];
+			for (var hh = 0; hh < 24; hh++) {
+				matrix[w][hh] = 0;
+				matrixDetails[w][hh] = [];
 			}
 		}
-		if (max < 1) {
-			max = 1;
-		}
+
+		rows.forEach(function(row) {
+			var start = Number(row.start || 0);
+			var end = Number(row.end || 0);
+			if (!isFinite(end) || end <= 0) {
+				end = toTs;
+			}
+			forEachOverlappedHour(start, end, fromTs, toTs, function(bucketTs) {
+				var dt = new Date(bucketTs * 1000);
+				var wday = dt.getDay();
+				var hour = dt.getHours();
+				matrix[wday][hour] += 1;
+				matrixDetails[wday][hour].push(row);
+			});
+		});
 
 		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Incident heatmap (day x hour)</div><div class="mnz-dse-heatmap-grid">';
 		html += '<div class="mnz-dse-heatmap-row mnz-dse-heatmap-head"><div class="mnz-dse-heatmap-corner"></div>';
-		(hm.hour_labels || []).forEach(function(lbl) {
+		hourLabels.forEach(function(lbl) {
 			html += '<div class="mnz-dse-heatmap-h">' + String(lbl).replace(/</g, '&lt;') + '</div>';
 		});
 		html += '</div>';
 
-		(matrix || []).forEach(function(row, widx) {
-			html += '<div class="mnz-dse-heatmap-row"><div class="mnz-dse-heatmap-w">' + (hm.week_labels && hm.week_labels[widx] ? hm.week_labels[widx] : widx) + '</div>';
-			row.forEach(function(v) {
-				var ratio = v <= 0 ? 0 : (v / max);
-				var alpha = ratio === 0 ? 0.08 : (0.2 + ratio * 0.8);
-				html += '<div class="mnz-dse-heatmap-cell" style="background:rgba(30,136,229,' + alpha.toFixed(3) + ')" title="' + v + '">' + v + '</div>';
+		matrix.forEach(function(row, widx) {
+			html += '<div class="mnz-dse-heatmap-row"><div class="mnz-dse-heatmap-w">' + weekLabels[widx] + '</div>';
+			row.forEach(function(v, hidx) {
+				var cls = 'mnz-dse-heatmap-cell';
+				if (v === 1) {
+					cls += ' mnz-dse-heatmap-hit-1';
+				}
+				else if (v >= 2) {
+					cls += ' mnz-dse-heatmap-hit-2';
+				}
+				var cellLabel = weekLabels[widx] + ' ' + hidx + ':00';
+				var tip = incidentTooltipLines(cellLabel, matrixDetails[widx][hidx]).replace(/"/g, '&quot;');
+				html += '<div class="' + cls + '" title="' + tip + '">' + v + '</div>';
 			});
 			html += '</div>';
 		});
@@ -559,12 +668,14 @@ jQuery(function() {
 			jQuery('#dse-top-triggers').html('<div class="mnz-dse-panel"><div class="mnz-dse-empty">' + (d.noDataLabel || 'No data') + '</div></div>');
 			return;
 		}
-		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Top triggers by downtime</div><table class="list-table"><thead><tr><th>Trigger ID</th><th>Host</th><th>Name</th><th>Severity</th><th>Downtime</th><th>Action</th></tr></thead><tbody>';
+		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Top triggers by downtime</div><table class="list-table"><thead><tr><th>Trigger ID</th><th>Host</th><th>Name</th><th>Start time</th><th>Severity</th><th>Downtime</th><th>Action</th></tr></thead><tbody>';
 		rows.forEach(function(row) {
+			var start = row.start ? new Date(row.start * 1000).toLocaleString() : '-';
 			html += '<tr>' +
 				'<td>' + row.triggerid + '</td>' +
 				'<td>' + String(row.host || '-').replace(/</g, '&lt;') + '</td>' +
 				'<td>' + String(row.name || '').replace(/</g, '&lt;') + '</td>' +
+				'<td>' + start + '</td>' +
 				'<td><span class="mnz-dse-sev ' + severityBadgeClass(row.severity) + '">' + String(row.severity_label || '-').replace(/</g, '&lt;') + '</span></td>' +
 				'<td>' + String(row.downtime || '-') + '</td>' +
 				'<td><button type="button" class="btn-alt mnz-dse-exclude-btn" data-triggerid="' + row.triggerid + '">Exclude</button></td>' +
@@ -585,7 +696,7 @@ jQuery(function() {
 			return;
 		}
 
-		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Timeline</div><table class="list-table"><thead><tr><th>Time</th><th>Recovery time</th><th>Status</th><th>Severity</th><th>Host</th><th>Trigger</th><th>Duration</th></tr></thead><tbody>';
+		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Timeline</div><table class="list-table"><thead><tr><th>Start time</th><th>Recovery time</th><th>Status</th><th>Severity</th><th>Host</th><th>Trigger</th><th>Duration</th></tr></thead><tbody>';
 		rows.forEach(function(row) {
 			var start = row.start ? new Date(row.start * 1000).toLocaleString() : '-';
 			var end = row.end ? new Date(row.end * 1000).toLocaleString() : '-';

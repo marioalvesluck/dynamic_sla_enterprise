@@ -114,6 +114,18 @@
 	border-color: rgba(255, 255, 255, 0.1);
 }
 
+[theme="dark-theme"] .mnz-dse-heatmap-cell.mnz-dse-heatmap-hit-1,
+[theme="hc-dark"] .mnz-dse-heatmap-cell.mnz-dse-heatmap-hit-1 {
+	background: #16a34a;
+	color: #ffffff;
+}
+
+[theme="dark-theme"] .mnz-dse-heatmap-cell.mnz-dse-heatmap-hit-2,
+[theme="hc-dark"] .mnz-dse-heatmap-cell.mnz-dse-heatmap-hit-2 {
+	background: #dc2626;
+	color: #ffffff;
+}
+
 [theme="dark-theme"] .mnz-dse-sev-0,
 [theme="hc-dark"] .mnz-dse-sev-0 { background: rgba(151, 170, 179, 0.22); color: #cbd5e1; }
 [theme="dark-theme"] .mnz-dse-sev-1,
