@@ -205,6 +205,24 @@
 	margin: 0 0 10px;
 }
 
+.mnz-dse-debug-head {
+	display: flex;
+	justify-content: flex-end;
+	margin: 0 0 6px;
+}
+
+.mnz-dse-debug-toggle {
+	font-size: 12px;
+}
+
+.mnz-dse-debug-body {
+	display: none;
+}
+
+.mnz-dse-debug.is-open .mnz-dse-debug-body {
+	display: block;
+}
+
 .mnz-dse-debug-pre {
 	margin: 0;
 	padding: 10px 12px;
@@ -381,6 +399,22 @@
 	color: #64748b;
 	text-align: right;
 }
+
+.mnz-dse-sev {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1.4;
+}
+
+.mnz-dse-sev-0 { background: rgba(151, 170, 179, 0.18); color: #475569; }
+.mnz-dse-sev-1 { background: rgba(116, 153, 255, 0.18); color: #1d4ed8; }
+.mnz-dse-sev-2 { background: rgba(255, 200, 89, 0.22); color: #92400e; }
+.mnz-dse-sev-3 { background: rgba(255, 160, 89, 0.22); color: #9a3412; }
+.mnz-dse-sev-4 { background: rgba(233, 118, 89, 0.22); color: #b91c1c; }
+.mnz-dse-sev-5 { background: rgba(228, 89, 89, 0.22); color: #991b1b; }
 
 @media (max-width: 1280px) {
 	.mnz-dse-filters {

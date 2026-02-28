@@ -50,23 +50,6 @@ $filters = (new CDiv([
 			->addClass('mnz-dse-input')
 	]))->addClass('mnz-dse-field'),
 	(new CDiv([
-		(new CLabel(_('Severity'), 'dse-severity'))->addClass('mnz-dse-label'),
-		(new CSelect('severity'))
-			->setId('dse-severity')
-			->setAttribute('multiple', 'multiple')
-			->setAttribute('size', '6')
-			->addClass('mnz-dse-input mnz-dse-multi')
-			->addOptions([
-				new CSelectOption('', _('All')),
-				new CSelectOption('0', _('Not classified')),
-				new CSelectOption('1', _('Information')),
-				new CSelectOption('2', _('Warning')),
-				new CSelectOption('3', _('Average')),
-				new CSelectOption('4', _('High')),
-				new CSelectOption('5', _('Disaster'))
-			])
-	]))->addClass('mnz-dse-field'),
-	(new CDiv([
 		(new CLabel(_('Period'), 'dse-period'))->addClass('mnz-dse-label'),
 		(new CSelect('period'))
 			->setId('dse-period')
@@ -141,7 +124,6 @@ $content->addItem((new CDiv([
 ]))->addClass('mnz-dse-panel'));
 
 $content->addItem((new CDiv())->setId('dse-status')->addClass('mnz-dse-status'));
-$content->addItem((new CDiv())->setId('dse-debug')->addClass('mnz-dse-debug'));
 $content->addItem((new CDiv())->setId('dse-exec')->addClass('mnz-dse-exec'));
 $content->addItem((new CDiv())->setId('dse-summary')->addClass('mnz-dse-summary'));
 $content->addItem((new CDiv())->setId('dse-daily')->addClass('mnz-dse-daily'));

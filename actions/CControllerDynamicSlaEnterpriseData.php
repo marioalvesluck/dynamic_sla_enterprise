@@ -72,8 +72,9 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		$groupids = $this->parseIds((string) $this->getInput('groupids', ''));
 		$hostids = $this->parseIds((string) $this->getInput('hostids', ''));
 		$triggerids = $this->parseIds((string) $this->getInput('triggerids', ''));
-		$severity_explicit = ((string) $this->getInput('severity_explicit', '0') === '1');
-		$severities = $severity_explicit ? $this->parseSeverities((string) $this->getInput('severity', '')) : [];
+		// Severity filter temporarily disabled by product decision.
+		$severity_explicit = false;
+		$severities = [];
 		$debug = [
 			'input_groupids' => $groupids,
 			'input_hostids' => $hostids,
@@ -229,8 +230,6 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			];
 		}
 
-		$timeline_limited = array_slice($timeline_rows, 0, 200);
-
 		return [
 			'groups' => $groups_out,
 			'hosts' => $hosts_out,
@@ -260,8 +259,9 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		$groupids = $this->parseIds((string) $this->getInput('groupids', ''));
 		$hostids = $this->parseIds((string) $this->getInput('hostids', ''));
 		$requested_triggerids = $this->parseIds((string) $this->getInput('triggerids', ''));
-		$severity_explicit = ((string) $this->getInput('severity_explicit', '0') === '1');
-		$severities = $severity_explicit ? $this->parseSeverities((string) $this->getInput('severity', '')) : [];
+		// Severity filter temporarily disabled by product decision.
+		$severity_explicit = false;
+		$severities = [];
 		$exclude_triggerids = array_flip($this->parseIds((string) $this->getInput('exclude_triggerids', '')));
 
 		$window_triggerids = $this->collectTriggerIdsWithIncidentsInWindow($from_ts, $to_ts, $groupids, $hostids, $severities);
@@ -274,9 +274,6 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			$triggerids = array_values(array_filter($triggerids, static function(int $tid) use ($requested_set): bool {
 				return isset($requested_set[$tid]);
 			}));
-			if (!$triggerids) {
-				$triggerids = $requested_triggerids;
-			}
 		}
 
 		if (!$triggerids && ($groupids || $hostids || $severities || $requested_triggerids)) {
@@ -336,7 +333,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'triggerid' => $tid,
 				'trigger_name' => $trigger_map[$tid]['name'] ?? _s('Trigger %1$s', (string) $tid),
 				'host' => $trigger_map[$tid]['host'] ?? '-',
-				'severity' => (int) ($incident['severity'] ?? 0),
+				'severity' => (int) ($trigger_map[$tid]['severity'] ?? $incident['severity'] ?? 0),
+				'severity_label' => $this->severityName((int) ($trigger_map[$tid]['severity'] ?? $incident['severity'] ?? 0)),
 				'start' => (int) $incident['s'],
 				'end' => (int) $incident['e'],
 				'status' => $incident['e'] >= $to_ts ? 'PROBLEM' : 'RESOLVED',
@@ -362,6 +360,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'triggerid' => (int) $tid,
 				'name' => $trigger_map[$tid]['name'] ?? _s('Trigger %1$s', (string) $tid),
 				'host' => $trigger_map[$tid]['host'] ?? '-',
+				'severity' => (int) ($trigger_map[$tid]['severity'] ?? 0),
+				'severity_label' => $this->severityName((int) ($trigger_map[$tid]['severity'] ?? 0)),
 				'downtime_seconds' => (int) $seconds,
 				'downtime' => $this->fmtDuration((int) $seconds)
 			];
@@ -373,6 +373,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 
 		$daily = $this->buildDailySeries($from_ts, $to_ts, $denominator_intervals, $downtime_intervals);
 		$heatmap = $this->buildHeatmap($timeline_rows);
+		$timeline_limited = array_slice($timeline_rows, 0, 200);
 
 		$risk = 'Low';
 		if ($availability < ($slo_target - 1.0) || count($timeline_rows) >= 10) {
@@ -458,6 +459,23 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		return array_values($out);
 	}
 
+	private function normalizeSeverityFilter(bool $severity_explicit, array $severities): array {
+		if (!$severity_explicit) {
+			return [false, []];
+		}
+
+		$severities = array_values(array_unique(array_filter(array_map('intval', $severities), static function(int $v): bool {
+			return $v >= 0 && $v <= 5;
+		})));
+
+		if (!$severities || count($severities) >= 6) {
+			return [false, []];
+		}
+
+		sort($severities);
+		return [true, $severities];
+	}
+
 	private function resolveWindow(string $period, string $from_input, string $to_input): array {
 		$now = time();
 		$from = strtotime($from_input);
@@ -530,7 +548,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			}
 			$trigger_map[$tid] = [
 				'name' => (string) ($trigger['description'] ?? _s('Trigger %1$s', (string) $tid)),
-				'host' => !empty($trigger['hosts'][0]['name']) ? (string) $trigger['hosts'][0]['name'] : '-'
+				'host' => !empty($trigger['hosts'][0]['name']) ? (string) $trigger['hosts'][0]['name'] : '-',
+				'severity' => (int) ($trigger['priority'] ?? 0)
 			];
 		}
 
@@ -1266,6 +1285,18 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		}
 
 		return implode(' ', array_slice($parts, 0, 2));
+	}
+
+	private function severityName(int $severity): string {
+		$names = [
+			0 => 'Not classified',
+			1 => 'Information',
+			2 => 'Warning',
+			3 => 'Average',
+			4 => 'High',
+			5 => 'Disaster'
+		];
+		return $names[$severity] ?? 'Unknown';
 	}
 
 	private function encodeJson(array $payload): string {

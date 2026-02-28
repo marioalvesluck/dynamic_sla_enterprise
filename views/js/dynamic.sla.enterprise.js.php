@@ -60,7 +60,7 @@ jQuery(function() {
 	}
 
 	function setResultsCollapsed(collapsed) {
-		var ids = ['#dse-debug', '#dse-exec', '#dse-summary', '#dse-daily', '#dse-heatmap', '#dse-top-triggers', '#dse-timeline'];
+		var ids = ['#dse-exec', '#dse-summary', '#dse-daily', '#dse-heatmap', '#dse-top-triggers', '#dse-timeline'];
 		ids.forEach(function(id) {
 			if (collapsed) {
 				jQuery(id).hide().empty();
@@ -72,32 +72,43 @@ jQuery(function() {
 		jQuery('#dse-run').prop('disabled', collapsed);
 	}
 
-	function renderDebugJson(debugObj) {
-		var $box = jQuery('#dse-debug');
-		if (!$box.length) {
-			return;
-		}
-		if (!debugObj || typeof debugObj !== 'object') {
-			$box.empty();
-			return;
-		}
-		var json = '';
-		try {
-			json = JSON.stringify(debugObj, null, 2);
-		}
-		catch (e) {
-			json = String(debugObj);
-		}
-		$box.html('<pre class="mnz-dse-debug-pre"></pre>');
-		$box.find('pre').text(json);
-	}
-
 	function selectedCsv(id) {
 		var vals = jQuery(id).val() || [];
 		if (!Array.isArray(vals)) {
 			vals = [vals];
 		}
 		return vals.filter(Boolean).join(',');
+	}
+
+	function severityPayload() {
+		var vals = jQuery('#dse-severity').val() || [];
+		if (!Array.isArray(vals)) {
+			vals = [vals];
+		}
+		vals = vals.map(String);
+		var hasAll = vals.indexOf('__all__') >= 0;
+		var cleaned = vals.filter(function(v) { return v !== '__all__'; });
+		var uniq = {};
+		var normalized = [];
+		cleaned.forEach(function(v) {
+			if (/^[0-5]$/.test(v) && !uniq[v]) {
+				uniq[v] = true;
+				normalized.push(v);
+			}
+		});
+		if (hasAll || normalized.length === 0 || normalized.length === 6) {
+			return { severity: '', severity_explicit: '0' };
+		}
+		return { severity: normalized.join(','), severity_explicit: '1' };
+	}
+
+	function severityBadgeClass(value) {
+		var sev = Number(value);
+		if (!isFinite(sev)) {
+			return 'mnz-dse-sev-0';
+		}
+		sev = Math.max(0, Math.min(5, Math.floor(sev)));
+		return 'mnz-dse-sev-' + sev;
 	}
 
 	function escapeHtml(v) {
@@ -116,11 +127,16 @@ jQuery(function() {
 		}
 		var selected = $select.find('option:selected');
 		var txt;
-		if (!selected.length) {
+		var isSeverity = ($select.attr('id') === 'dse-severity');
+		var hasAll = isSeverity && $select.find('option[value="__all__"]').is(':selected');
+		if (!selected.length || hasAll) {
 			txt = 'All';
 		}
 		else if (selected.length === 1) {
 			txt = selected.first().text();
+		}
+		else if (isSeverity && selected.length >= 6) {
+			txt = 'All';
 		}
 		else {
 			txt = selected.length + ' selected';
@@ -205,6 +221,24 @@ jQuery(function() {
 		root.on('change', '.mnz-dse-ms-options input[type="checkbox"]', function() {
 			var val = String(jQuery(this).val() || '');
 			var checked = jQuery(this).is(':checked');
+			var isSeverity = ($select.attr('id') === 'dse-severity');
+
+			if (isSeverity) {
+				if (val === '__all__' && checked) {
+					root.find('.mnz-dse-ms-options input[type="checkbox"]').prop('checked', false);
+					jQuery(this).prop('checked', true);
+					$select.find('option').prop('selected', false);
+					$select.find('option[value="__all__"]').prop('selected', true);
+					updateMsToggle(select);
+					$select.trigger('change');
+					return;
+				}
+				if (val !== '__all__' && checked) {
+					root.find('.mnz-dse-ms-options input[type="checkbox"][value="__all__"]').prop('checked', false);
+					$select.find('option[value="__all__"]').prop('selected', false);
+				}
+			}
+
 			$select.find('option').each(function() {
 				if (String(jQuery(this).attr('value') || '') === val) {
 					jQuery(this).prop('selected', checked);
@@ -216,8 +250,17 @@ jQuery(function() {
 
 		root.on('click', '.mnz-dse-ms-all', function(e) {
 			e.preventDefault();
-			root.find('.mnz-dse-ms-options input[type="checkbox"]').prop('checked', true);
-			$select.find('option').prop('selected', true);
+			var isSeverity = ($select.attr('id') === 'dse-severity');
+			if (isSeverity) {
+				root.find('.mnz-dse-ms-options input[type="checkbox"]').prop('checked', false);
+				root.find('.mnz-dse-ms-options input[type="checkbox"][value="__all__"]').prop('checked', true);
+				$select.find('option').prop('selected', false);
+				$select.find('option[value="__all__"]').prop('selected', true);
+			}
+			else {
+				root.find('.mnz-dse-ms-options input[type="checkbox"]').prop('checked', true);
+				$select.find('option').prop('selected', true);
+			}
 			updateMsToggle(select);
 			$select.trigger('change');
 		});
@@ -240,7 +283,7 @@ jQuery(function() {
 			return;
 		}
 		$sev.html(
-			'<option value="">All</option>' +
+			'<option value="__all__">All</option>' +
 			'<option value="0">Not classified</option>' +
 			'<option value="1">Information</option>' +
 			'<option value="2">Warning</option>' +
@@ -259,8 +302,8 @@ jQuery(function() {
 		var $sev = jQuery('#dse-severity');
 		if ($sev.length && !$sev.data('mnz-sev-default-cleared')) {
 			$sev.find('option').prop('selected', false);
+			$sev.find('option[value="__all__"]').prop('selected', true);
 			$sev.data('mnz-sev-default-cleared', true);
-			$sev.data('mnz-sev-user-set', false);
 			rebuildMsOptions('#dse-severity');
 		}
 	}
@@ -288,7 +331,7 @@ jQuery(function() {
 	}
 
 	function buildBasePayload() {
-		var severityExplicit = jQuery('#dse-severity').data('mnz-sev-user-set') ? '1' : '0';
+		var severity = severityPayload();
 		return {
 			period: jQuery('#dse-period').val(),
 			from: jQuery('#dse-from').val(),
@@ -296,8 +339,8 @@ jQuery(function() {
 			groupids: selectedCsv('#dse-groupids'),
 			hostids: selectedCsv('#dse-hostids'),
 			triggerids: selectedCsv('#dse-triggerids'),
-			severity: selectedCsv('#dse-severity'),
-			severity_explicit: severityExplicit,
+			severity: severity.severity,
+			severity_explicit: severity.severity_explicit,
 			exclude_triggerids: jQuery('#dse-exclude-triggerids').val(),
 			business_mode: jQuery('#dse-business-mode').val(),
 			business_start: jQuery('#dse-business-start').val(),
@@ -382,30 +425,10 @@ jQuery(function() {
 
 			populateSelect('#dse-hostids', data.hosts, selectedHosts);
 			populateSelect('#dse-triggerids', data.triggers, selectedTriggers);
-			renderDebugJson(data.debug || null);
-			var debugTxt = '';
-			if (data.debug) {
-				var dbgParts = [];
-				if (typeof data.debug.window_triggerids_count !== 'undefined') {
-					dbgParts.push('window=' + data.debug.window_triggerids_count);
-				}
-				if (typeof data.debug.problem_screen_triggerids_count !== 'undefined') {
-					dbgParts.push('problem.screen=' + data.debug.problem_screen_triggerids_count);
-				}
-				if (typeof data.debug.problem_fallback_ids_count !== 'undefined') {
-					dbgParts.push('problem=' + data.debug.problem_fallback_ids_count);
-				}
-				if (typeof data.debug.event_fallback_ids_count !== 'undefined') {
-					dbgParts.push('event=' + data.debug.event_fallback_ids_count);
-				}
-				if (dbgParts.length) {
-					debugTxt = ' | debug: ' + dbgParts.join(' / ');
-				}
-			}
 			setStatus(
 				'Options loaded: groups ' + (data.groups ? data.groups.length : 0) +
 				' | hosts ' + (data.hosts ? data.hosts.length : 0) +
-				' | triggers ' + (data.triggers ? data.triggers.length : 0) + debugTxt,
+				' | triggers ' + (data.triggers ? data.triggers.length : 0),
 				'ok'
 			);
 
@@ -536,12 +559,13 @@ jQuery(function() {
 			jQuery('#dse-top-triggers').html('<div class="mnz-dse-panel"><div class="mnz-dse-empty">' + (d.noDataLabel || 'No data') + '</div></div>');
 			return;
 		}
-		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Top triggers by downtime</div><table class="list-table"><thead><tr><th>Trigger ID</th><th>Host</th><th>Name</th><th>Downtime</th><th>Action</th></tr></thead><tbody>';
+		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Top triggers by downtime</div><table class="list-table"><thead><tr><th>Trigger ID</th><th>Host</th><th>Name</th><th>Severity</th><th>Downtime</th><th>Action</th></tr></thead><tbody>';
 		rows.forEach(function(row) {
 			html += '<tr>' +
 				'<td>' + row.triggerid + '</td>' +
 				'<td>' + String(row.host || '-').replace(/</g, '&lt;') + '</td>' +
 				'<td>' + String(row.name || '').replace(/</g, '&lt;') + '</td>' +
+				'<td><span class="mnz-dse-sev ' + severityBadgeClass(row.severity) + '">' + String(row.severity_label || '-').replace(/</g, '&lt;') + '</span></td>' +
 				'<td>' + String(row.downtime || '-') + '</td>' +
 				'<td><button type="button" class="btn-alt mnz-dse-exclude-btn" data-triggerid="' + row.triggerid + '">Exclude</button></td>' +
 			'</tr>';
@@ -561,7 +585,7 @@ jQuery(function() {
 			return;
 		}
 
-		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Timeline</div><table class="list-table"><thead><tr><th>Time</th><th>Recovery time</th><th>Status</th><th>Host</th><th>Trigger</th><th>Duration</th></tr></thead><tbody>';
+		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Timeline</div><table class="list-table"><thead><tr><th>Time</th><th>Recovery time</th><th>Status</th><th>Severity</th><th>Host</th><th>Trigger</th><th>Duration</th></tr></thead><tbody>';
 		rows.forEach(function(row) {
 			var start = row.start ? new Date(row.start * 1000).toLocaleString() : '-';
 			var end = row.end ? new Date(row.end * 1000).toLocaleString() : '-';
@@ -570,6 +594,7 @@ jQuery(function() {
 				'<td>' + start + '</td>' +
 				'<td>' + end + '</td>' +
 				'<td><span class="' + statusCls + '">' + String(row.status || '-') + '</span></td>' +
+				'<td><span class="mnz-dse-sev ' + severityBadgeClass(row.severity) + '">' + String(row.severity_label || '-').replace(/</g, '&lt;') + '</span></td>' +
 				'<td>' + String(row.host || '-').replace(/</g, '&lt;') + '</td>' +
 				'<td>' + String(row.trigger_name || '-').replace(/</g, '&lt;') + '</td>' +
 				'<td>' + String(row.duration || '-') + '</td>' +
@@ -656,7 +681,6 @@ jQuery(function() {
 		loadOptions('hosts');
 	});
 	jQuery('#dse-severity').on('change', function() {
-		jQuery('#dse-severity').data('mnz-sev-user-set', true);
 		loadOptions('severity');
 	});
 	jQuery('#dse-refresh-options').on('click', function(e) {
