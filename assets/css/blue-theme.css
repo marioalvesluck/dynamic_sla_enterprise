@@ -2,6 +2,13 @@
 	padding: 18px;
 }
 
+.mnz-dse-inner-sheet {
+	background: #f3f6fb;
+	border: 1px solid #d7e1ee;
+	border-radius: 12px;
+	padding: 14px;
+}
+
 .mnz-dse-title {
 	margin: 0 0 12px;
 	font-size: 24px;
@@ -40,6 +47,14 @@
 	display: grid;
 	grid-template-columns: repeat(4, minmax(0, 1fr));
 	gap: 10px;
+}
+
+.mnz-dse-inner-card {
+	padding: 12px;
+	border: 1px solid #cbd5e1;
+	border-radius: 10px;
+	background: #f8fbff;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .mnz-dse-field {

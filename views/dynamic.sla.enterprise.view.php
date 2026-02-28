@@ -35,6 +35,7 @@ $html_page = (new CHtmlPage())
 	);
 
 $content = (new CDiv())->addClass('mnz-dse-wrapper');
+$sheet = (new CDiv())->addClass('mnz-dse-inner-sheet');
 
 $filters = (new CDiv([
 	(new CDiv([
@@ -151,20 +152,22 @@ $filters = (new CDiv([
 	]))->addClass('mnz-dse-field mnz-dse-actions')
 ]))->addClass('mnz-dse-filters');
 
-$content->addItem((new CDiv([
+$sheet->addItem((new CDiv([
 	(new CDiv(_('SLA calculation window')))->addClass('mnz-dse-section-title'),
-	$filters
+	(new CDiv([
+		$filters
+	]))->addClass('mnz-dse-inner-card')
 ]))->addClass('mnz-dse-panel'));
 
-$content->addItem((new CDiv())->setId('dse-status')->addClass('mnz-dse-status'));
-$content->addItem((new CDiv())->setId('dse-exec')->addClass('mnz-dse-exec'));
-$content->addItem((new CDiv())->setId('dse-summary')->addClass('mnz-dse-summary'));
-$content->addItem((new CDiv())->setId('dse-insights')->addClass('mnz-dse-insights'));
-$content->addItem((new CDiv())->setId('dse-daily')->addClass('mnz-dse-daily'));
-$content->addItem((new CDiv())->setId('dse-heatmap')->addClass('mnz-dse-heatmap'));
-$content->addItem((new CDiv())->setId('dse-host-impact')->addClass('mnz-dse-host-impact'));
-$content->addItem((new CDiv())->setId('dse-top-triggers')->addClass('mnz-dse-top-triggers'));
-$content->addItem((new CDiv())->setId('dse-timeline')->addClass('mnz-dse-timeline'));
+$sheet->addItem((new CDiv())->setId('dse-status')->addClass('mnz-dse-status'));
+$sheet->addItem((new CDiv())->setId('dse-exec')->addClass('mnz-dse-exec'));
+$sheet->addItem((new CDiv())->setId('dse-summary')->addClass('mnz-dse-summary'));
+$sheet->addItem((new CDiv())->setId('dse-insights')->addClass('mnz-dse-insights'));
+$sheet->addItem((new CDiv())->setId('dse-daily')->addClass('mnz-dse-daily'));
+$sheet->addItem((new CDiv())->setId('dse-heatmap')->addClass('mnz-dse-heatmap'));
+$sheet->addItem((new CDiv())->setId('dse-host-impact')->addClass('mnz-dse-host-impact'));
+$sheet->addItem((new CDiv())->setId('dse-top-triggers')->addClass('mnz-dse-top-triggers'));
+$sheet->addItem((new CDiv())->setId('dse-timeline')->addClass('mnz-dse-timeline'));
 
 $chart_data = [
 	'nowTs' => (int) ($data['now_ts'] ?? time()),
@@ -176,7 +179,9 @@ $chart_data = [
 
 ob_start();
 include dirname(__FILE__).'/js/dynamic.sla.enterprise.js.php';
-$content->addItem(new CScriptTag(ob_get_clean()));
+$sheet->addItem(new CScriptTag(ob_get_clean()));
+
+$content->addItem($sheet);
 
 $html_page->addItem($content);
 $html_page->show();
