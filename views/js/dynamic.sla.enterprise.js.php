@@ -296,6 +296,18 @@ jQuery(function() {
 	}
 
 	function toStringArray(values) {
+		if (values == null) {
+			return [];
+		}
+		if (typeof values === 'string') {
+			return values
+				.split(/[,\n;\s]+/)
+				.map(function(v) { return String(v).trim(); })
+				.filter(function(v) { return v !== ''; });
+		}
+		if (typeof values === 'number') {
+			return [String(values)];
+		}
 		if (!Array.isArray(values)) {
 			return [];
 		}
@@ -453,14 +465,14 @@ jQuery(function() {
 		jQuery('#dse-slo-target').val(String(state.slo_target || '99.9'));
 		applyPeriodPreset();
 
-		setSelectValues('#dse-groupids', state.groupids || []);
+		setSelectValues('#dse-groupids', state.groupids || state.groupids_csv || state.groupid || []);
 		renderSavedViews();
 
 		removeStorageKeys();
 		loadOptions('groups', true).always(function() {
-			setSelectValues('#dse-hostids', state.hostids || []);
+			setSelectValues('#dse-hostids', state.hostids || state.hostids_csv || state.hostid || []);
 			loadOptions('hosts', true).always(function() {
-				setSelectValues('#dse-triggerids', state.triggerids || []);
+				setSelectValues('#dse-triggerids', state.triggerids || state.triggerids_csv || state.triggerid || []);
 				run(true);
 			});
 		});
