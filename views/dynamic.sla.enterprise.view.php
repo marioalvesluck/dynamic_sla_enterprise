@@ -38,6 +38,16 @@ $html_page = (new CHtmlPage())
 						->addClass(ZBX_STYLE_BTN_ALT)
 				)
 				->addItem(
+					(new CButton('dse-export-views', _('Export views')))
+						->setId('dse-export-views')
+						->addClass(ZBX_STYLE_BTN_ALT)
+				)
+				->addItem(
+					(new CButton('dse-import-views', _('Import views')))
+						->setId('dse-import-views')
+						->addClass(ZBX_STYLE_BTN_ALT)
+				)
+				->addItem(
 					(new CButton('go_problems', _('Back to Problems')))
 						->setAttribute('onclick', "location.href='zabbix.php?action=problem.view'")
 				)
@@ -193,6 +203,7 @@ $sheet->addItem((new CDiv([
 ]))->addClass('mnz-dse-panel'));
 
 $sheet->addItem((new CDiv())->setId('dse-status')->addClass('mnz-dse-status'));
+$sheet->addItem((new CDiv())->setId('dse-audit')->addClass('mnz-dse-audit'));
 $sheet->addItem((new CDiv())->setId('dse-exec')->addClass('mnz-dse-exec'));
 $sheet->addItem((new CDiv())->setId('dse-summary')->addClass('mnz-dse-summary'));
 $sheet->addItem((new CDiv())->setId('dse-insights')->addClass('mnz-dse-insights'));
@@ -215,6 +226,13 @@ include dirname(__FILE__).'/js/dynamic.sla.enterprise.js.php';
 $sheet->addItem(new CScriptTag(ob_get_clean()));
 
 $content->addItem($sheet);
+$content->addItem(
+	(new CTag('input', false, ''))
+		->setAttribute('type', 'file')
+		->setAttribute('accept', 'application/json,.json')
+		->setAttribute('id', 'dse-import-file')
+		->setAttribute('style', 'display:none')
+);
 
 $html_page->addItem($content);
 $html_page->show();

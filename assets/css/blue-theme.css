@@ -322,6 +322,25 @@
 	color: #b91c1c;
 }
 
+.mnz-dse-audit {
+	margin: 0 0 10px;
+}
+
+.mnz-dse-audit-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.mnz-dse-audit-item {
+	font-size: 12px;
+	color: #334155;
+}
+
+.mnz-dse-audit-muted {
+	color: #64748b;
+}
+
 .mnz-dse-debug {
 	margin: 0 0 10px;
 }
@@ -841,6 +860,9 @@
 }
 
 @media (max-width: 860px) {
+	.mnz-dse-audit-grid {
+		grid-template-columns: 1fr;
+	}
 	.mnz-dse-filters,
 	.mnz-dse-cards,
 	.mnz-dse-cards-exec {

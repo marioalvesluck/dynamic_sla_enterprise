@@ -195,7 +195,7 @@ $monthly_trend = (new CDiv([
 $cover_page = (new CDiv([
 	(new CDiv([
 		(new CTag('img', false, ''))
-			->setAttribute('src', 'modules/dynamic_sla_enterprise/logo/logo_montechco.jpg')
+			->setAttribute('src', 'modules/dynamic_sla_enterprise/logo/logo-basa-2023.png')
 			->setAttribute('alt', 'Company logo')
 			->addClass('dse-rpt-logo-img'),
 		(new CTag('h1', true, _('SLA Dashboard Report')))->addClass('dse-rpt-title')

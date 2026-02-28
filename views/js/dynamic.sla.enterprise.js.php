@@ -17,7 +17,8 @@ jQuery(function() {
 	var CACHE_KEYS = {
 		options: CACHE_NS + '_options',
 		calc: CACHE_NS + '_calc',
-		savedViews: CACHE_NS + '_saved_views'
+		savedViews: CACHE_NS + '_saved_views',
+		audit: CACHE_NS + '_audit'
 	};
 	var activeSavedViewId = null;
 	var pendingOverwriteViewId = null;
@@ -133,6 +134,166 @@ jQuery(function() {
 		writeStorageJson(CACHE_KEYS.savedViews, Array.isArray(views) ? views : []);
 	}
 
+	function getAudit() {
+		var audit = readStorageJson(CACHE_KEYS.audit, {});
+		if (!audit || typeof audit !== 'object') {
+			return {};
+		}
+		if (!Array.isArray(audit.trail)) {
+			audit.trail = [];
+		}
+		return audit;
+	}
+
+	function setAudit(audit) {
+		var clean = audit && typeof audit === 'object' ? audit : {};
+		if (!Array.isArray(clean.trail)) {
+			clean.trail = [];
+		}
+		writeStorageJson(CACHE_KEYS.audit, clean);
+	}
+
+	function fmtTs(ts) {
+		var n = Number(ts || 0);
+		if (!isFinite(n) || n <= 0) {
+			return '-';
+		}
+		return new Date(n).toLocaleString();
+	}
+
+	function pushAudit(kind, details) {
+		var audit = getAudit();
+		var now = Date.now();
+		if (kind === 'calc') {
+			audit.last_calculation = { ts: now, details: details || {} };
+		}
+		else if (kind === 'clear_cache') {
+			audit.last_clear_cache = { ts: now, details: details || {} };
+		}
+		else if (kind === 'overwrite') {
+			audit.last_overwrite = { ts: now, details: details || {} };
+		}
+		else if (kind === 'import') {
+			audit.last_import = { ts: now, details: details || {} };
+		}
+		else if (kind === 'export') {
+			audit.last_export = { ts: now, details: details || {} };
+		}
+
+		audit.trail = audit.trail || [];
+		audit.trail.unshift({
+			ts: now,
+			kind: String(kind || 'event'),
+			details: details || {}
+		});
+		audit.trail = audit.trail.slice(0, 20);
+		setAudit(audit);
+		renderAudit();
+	}
+
+	function renderAudit() {
+		var audit = getAudit();
+		var calc = audit.last_calculation || {};
+		var clear = audit.last_clear_cache || {};
+		var overwrite = audit.last_overwrite || {};
+		var calcInfo = '-';
+		if (calc.details && calc.details.window) {
+			calcInfo = String(calc.details.window) + (calc.details.source ? (' (' + calc.details.source + ')') : '');
+		}
+		var overwriteInfo = overwrite.details && overwrite.details.name ? String(overwrite.details.name) : '-';
+
+		var html = '<div class="mnz-dse-panel">' +
+			'<div class="mnz-dse-section-title">Audit</div>' +
+			'<div class="mnz-dse-audit-grid">' +
+				'<div class="mnz-dse-audit-item"><b>Last calculation:</b> ' + escapeHtml(fmtTs(calc.ts)) + ' <span class="mnz-dse-audit-muted">' + escapeHtml(calcInfo) + '</span></div>' +
+				'<div class="mnz-dse-audit-item"><b>Last clear cache:</b> ' + escapeHtml(fmtTs(clear.ts)) + '</div>' +
+				'<div class="mnz-dse-audit-item"><b>Last overwrite view:</b> ' + escapeHtml(fmtTs(overwrite.ts)) + ' <span class="mnz-dse-audit-muted">' + escapeHtml(overwriteInfo) + '</span></div>' +
+			'</div>' +
+		'</div>';
+		jQuery('#dse-audit').html(html);
+	}
+
+	function exportSavedViews() {
+		var views = getSavedViews();
+		var payload = {
+			module: 'inteligence_enterprise',
+			exported_at: new Date().toISOString(),
+			views: views
+		};
+		var fileTs = new Date().toISOString().replace(/[:T]/g, '-').replace(/\..+$/, '');
+		var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+		var url = URL.createObjectURL(blob);
+		var a = document.createElement('a');
+		a.href = url;
+		a.download = 'inteligence-enterprise-saved-views-' + fileTs + '.json';
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+		pushAudit('export', { count: views.length });
+		setStatus('Saved views exported: ' + views.length, 'ok');
+	}
+
+	function normalizeImportedViews(raw) {
+		var inViews = [];
+		if (Array.isArray(raw)) {
+			inViews = raw;
+		}
+		else if (raw && typeof raw === 'object' && Array.isArray(raw.views)) {
+			inViews = raw.views;
+		}
+
+		var out = [];
+		inViews.forEach(function(v) {
+			if (!v || typeof v !== 'object') {
+				return;
+			}
+			var name = String(v.name || '').trim();
+			var state = v.state && typeof v.state === 'object' ? v.state : null;
+			if (!name || !state) {
+				return;
+			}
+			out.push({
+				id: String(v.id || (String(Date.now()) + '_' + String(Math.floor(Math.random() * 100000)))),
+				name: name,
+				state: state,
+				created_at: Number(v.created_at || Date.now()),
+				updated_at: Number(v.updated_at || 0)
+			});
+		});
+		return out;
+	}
+
+	function mergeImportedViews(importedViews) {
+		var current = getSavedViews();
+		var byName = {};
+		current.forEach(function(v) {
+			byName[String(v.name || '').toLowerCase()] = v;
+		});
+		var imported = 0;
+		var overwritten = 0;
+		importedViews.forEach(function(v) {
+			var key = String(v.name || '').toLowerCase();
+			if (!key) {
+				return;
+			}
+			if (byName[key]) {
+				byName[key].state = v.state;
+				byName[key].updated_at = Date.now();
+				overwritten++;
+			}
+			else {
+				current.push(v);
+				byName[key] = v;
+				imported++;
+			}
+		});
+		setSavedViews(current);
+		renderSavedViews();
+		pushAudit('import', { imported: imported, overwritten: overwritten, total: importedViews.length });
+		setStatus('Views imported: ' + imported + ', overwritten: ' + overwritten, 'ok');
+	}
+
 	function toStringArray(values) {
 		if (!Array.isArray(values)) {
 			return [];
@@ -224,6 +385,7 @@ jQuery(function() {
 			views[found].state = state;
 			views[found].updated_at = Date.now();
 			activeSavedViewId = String(views[found].id || '');
+			pushAudit('overwrite', { name: name });
 		}
 		else {
 			var newId = String(Date.now()) + '_' + String(Math.floor(Math.random() * 100000));
@@ -1408,6 +1570,7 @@ jQuery(function() {
 			renderHostsImpact(cached);
 			renderTopTriggers(cached);
 			renderTimeline(cached);
+			pushAudit('calc', { source: 'cache', window: String(cached.summary && cached.summary.window_label ? cached.summary.window_label : '') });
 			setStatus('SLA calculation loaded from cache', 'ok');
 			btn.prop('disabled', false).text(d.runLabel || 'Calculate SLA');
 			return;
@@ -1433,6 +1596,7 @@ jQuery(function() {
 			renderHostsImpact(res.data);
 			renderTopTriggers(res.data);
 			renderTimeline(res.data);
+			pushAudit('calc', { source: (res.data && res.data.cache && res.data.cache.hit) ? 'server-cache' : 'api', window: String(res.data.summary && res.data.summary.window_label ? res.data.summary.window_label : '') });
 			setStatus((res.data && res.data.note) ? res.data.note : 'SLA calculation finished', (res.data && res.data.note) ? 'error' : 'ok');
 		}).fail(function(jqXHR) {
 			setStatus(parseError(jqXHR, d.failedLabel || 'Failed to calculate SLA'), 'error');
@@ -1452,6 +1616,7 @@ jQuery(function() {
 				clear_cache: '1'
 			}
 		}).always(function() {
+			pushAudit('clear_cache', {});
 			setStatus('Dashboard cache cleared', 'ok');
 		});
 	}
@@ -1503,6 +1668,38 @@ jQuery(function() {
 	jQuery('#dse-clear-cache').on('click', function(e) {
 		e.preventDefault();
 		clearAllCache();
+	});
+	jQuery('#dse-export-views').on('click', function(e) {
+		e.preventDefault();
+		exportSavedViews();
+	});
+	jQuery('#dse-import-views').on('click', function(e) {
+		e.preventDefault();
+		jQuery('#dse-import-file').trigger('click');
+	});
+	jQuery('#dse-import-file').on('change', function(e) {
+		var file = e.target && e.target.files ? e.target.files[0] : null;
+		if (!file) {
+			return;
+		}
+		var reader = new FileReader();
+		reader.onload = function(evt) {
+			try {
+				var parsed = JSON.parse(String((evt && evt.target && evt.target.result) || ''));
+				var importedViews = normalizeImportedViews(parsed);
+				if (!importedViews.length) {
+					setStatus('No valid saved views found in file.', 'error');
+				}
+				else {
+					mergeImportedViews(importedViews);
+				}
+			}
+			catch (err) {
+				setStatus('Invalid JSON file for saved views import.', 'error');
+			}
+			jQuery('#dse-import-file').val('');
+		};
+		reader.readAsText(file);
 	});
 	jQuery('#dse-save-view').on('click', function(e) {
 		e.preventDefault();
@@ -1674,6 +1871,7 @@ jQuery(function() {
 	applyPeriodPreset();
 	setupMultiSelects();
 	renderSavedViews();
+	renderAudit();
 	setResultsCollapsed(true);
 	setStatus('Select at least one Host group to enable calculation.', 'ok');
 	loadOptions('init').always(function() {
