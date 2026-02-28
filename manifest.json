@@ -15,12 +15,18 @@
 		},
 		"dynamic.sla.enterprise.data": {
 			"class": "CControllerDynamicSlaEnterpriseData"
+		},
+		"dynamic.sla.enterprise.report": {
+			"class": "CControllerDynamicSlaEnterpriseReport",
+			"view": "dynamic.sla.enterprise.report",
+			"layout": "layout.htmlpage"
 		}
 	},
 	"assets": {
 		"css": [
 			"blue-theme.css",
-			"dark-theme.css"
+			"dark-theme.css",
+			"report.css"
 		],
 		"js": []
 	}

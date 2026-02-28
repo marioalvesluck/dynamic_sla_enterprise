@@ -1044,6 +1044,49 @@ jQuery(function() {
 		return msg;
 	}
 
+	function toBase64Json(obj) {
+		try {
+			var json = JSON.stringify(obj || {});
+			return btoa(unescape(encodeURIComponent(json)));
+		}
+		catch (e) {
+			return '';
+		}
+	}
+
+	function openReport(autoPrint) {
+		if (!lastCalculatedData) {
+			setStatus('Run calculation before generating report.', 'error');
+			return;
+		}
+		var persona = String(jQuery('#dse-report-persona').val() || 'noc');
+		var payload = toBase64Json(lastCalculatedData);
+		if (!payload) {
+			setStatus('Unable to encode report payload.', 'error');
+			return;
+		}
+
+		var form = document.createElement('form');
+		form.method = 'POST';
+		form.action = 'zabbix.php?action=dynamic.sla.enterprise.report';
+		form.target = '_blank';
+
+		function add(name, value) {
+			var i = document.createElement('input');
+			i.type = 'hidden';
+			i.name = name;
+			i.value = String(value == null ? '' : value);
+			form.appendChild(i);
+		}
+		add('persona', persona);
+		add('auto_print', autoPrint ? '1' : '0');
+		add('payload', payload);
+
+		document.body.appendChild(form);
+		form.submit();
+		document.body.removeChild(form);
+	}
+
 	function run() {
 		if (!hasSelectedGroups()) {
 			setResultsCollapsed(true);
@@ -1120,6 +1163,14 @@ jQuery(function() {
 	jQuery('#dse-run').on('click', function(e) {
 		e.preventDefault();
 		run();
+	});
+	jQuery('#dse-generate-report').on('click', function(e) {
+		e.preventDefault();
+		openReport(false);
+	});
+	jQuery('#dse-quick-print').on('click', function(e) {
+		e.preventDefault();
+		openReport(true);
 	});
 	jQuery(document).on('click', '.mnz-dse-exclude-btn', function() {
 		appendExcludedTrigger(jQuery(this).data('triggerid'));

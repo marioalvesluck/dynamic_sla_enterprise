@@ -9,6 +9,25 @@ $html_page = (new CHtmlPage())
 		(new CTag('nav', true,
 			(new CList())
 				->addItem(
+					(new CButton('dse-generate-report', _('Generate report')))
+						->setId('dse-generate-report')
+						->addClass(ZBX_STYLE_BTN_ALT)
+				)
+				->addItem(
+					(new CButton('dse-quick-print', _('Quick print')))
+						->setId('dse-quick-print')
+						->addClass(ZBX_STYLE_BTN_ALT)
+				)
+				->addItem(
+					(new CSelect('dse-report-persona'))
+						->setId('dse-report-persona')
+						->addOptions([
+							new CSelectOption('noc', _('Persona: NOC'), true),
+							new CSelectOption('gestao', _('Persona: Gestão'), false),
+							new CSelectOption('diretoria', _('Persona: Diretoria'), false)
+						])
+				)
+				->addItem(
 					(new CButton('go_problems', _('Back to Problems')))
 						->setAttribute('onclick', "location.href='zabbix.php?action=problem.view'")
 				)
