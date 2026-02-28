@@ -27,6 +27,23 @@ jQuery(function() {
 		return n.toFixed(3) + '%';
 	}
 
+	function fmtDownShort(seconds) {
+		var s = Number(seconds || 0);
+		if (!isFinite(s) || s <= 0) {
+			return '0m';
+		}
+		var d = Math.floor(s / 86400);
+		var h = Math.floor((s % 86400) / 3600);
+		var m = Math.floor((s % 3600) / 60);
+		if (d > 0) {
+			return d + 'd ' + h + 'h';
+		}
+		if (h > 0) {
+			return h + 'h ' + m + 'm';
+		}
+		return m + 'm';
+	}
+
 	function setStatus(message, type) {
 		jQuery('#dse-status')
 			.removeClass('mnz-dse-status-error mnz-dse-status-ok')
@@ -358,6 +375,11 @@ jQuery(function() {
 				' | triggers ' + (data.triggers ? data.triggers.length : 0) + debugTxt,
 				'ok'
 			);
+
+			// Keep cards/charts/timeline aligned with current filter selection.
+			if (triggeredBy !== 'init') {
+				run();
+			}
 		}).always(function() {
 			jQuery('#dse-refresh-options').prop('disabled', false);
 		});
@@ -413,6 +435,7 @@ jQuery(function() {
 		arr.forEach(function(row) {
 			var h = Math.max(4, ((row.downtime_seconds || 0) / maxDown) * 88);
 			bars += '<div class="mnz-dse-bar-item" title="' + row.date + ' | Avail: ' + fmtPct(row.availability) + ' | Down: ' + (row.downtime_seconds || 0) + 's">' +
+				'<span class="mnz-dse-bar-val">' + fmtDownShort(row.downtime_seconds || 0) + '</span>' +
 				'<div class="mnz-dse-bar" style="height:' + h + 'px"></div>' +
 				'<span class="mnz-dse-bar-lbl">' + String(row.date || '').slice(5) + '</span>' +
 			'</div>';

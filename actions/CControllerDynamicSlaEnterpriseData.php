@@ -858,16 +858,21 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			$value = (int) ($event['value'] ?? 0);
 
 			if ($value === 1) {
-				$pending[$tid][] = [
-					'clock' => $clock,
-					'severity' => (int) ($event['severity'] ?? 0),
-					'name' => (string) ($event['name'] ?? '')
-				];
+				// Keep only one open problem interval per trigger to avoid
+				// duplicated starts inflating downtime when repeated PROBLEM
+				// events appear without an intermediate recovery.
+				if (!isset($pending[$tid])) {
+					$pending[$tid] = [
+						'clock' => $clock,
+						'severity' => (int) ($event['severity'] ?? 0),
+						'name' => (string) ($event['name'] ?? '')
+					];
+				}
 				continue;
 			}
 
-			if (!empty($pending[$tid])) {
-				$start = array_shift($pending[$tid]);
+			if (isset($pending[$tid])) {
+				$start = $pending[$tid];
 				$incidents[] = [
 					'triggerid' => $tid,
 					's' => (int) $start['clock'],
@@ -875,22 +880,21 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 					'severity' => (int) $start['severity'],
 					'name' => (string) $start['name']
 				];
+				unset($pending[$tid]);
 			}
 		}
 
-		foreach ($pending as $tid => $starts) {
+		foreach ($pending as $tid => $start) {
 			if (isset($exclude_triggerids[(int) $tid])) {
 				continue;
 			}
-			foreach ($starts as $start) {
-				$incidents[] = [
-					'triggerid' => (int) $tid,
-					's' => (int) $start['clock'],
-					'e' => $to_ts,
-					'severity' => (int) ($start['severity'] ?? 0),
-					'name' => (string) ($start['name'] ?? '')
-				];
-			}
+			$incidents[] = [
+				'triggerid' => (int) $tid,
+				's' => (int) $start['clock'],
+				'e' => $to_ts,
+				'severity' => (int) ($start['severity'] ?? 0),
+				'name' => (string) ($start['name'] ?? '')
+			];
 		}
 
 		$clipped = [];

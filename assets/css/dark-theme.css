@@ -16,11 +16,13 @@
 [theme="dark-theme"] .mnz-dse-label,
 [theme="dark-theme"] .mnz-dse-k,
 [theme="dark-theme"] .mnz-dse-section-title,
+[theme="dark-theme"] .mnz-dse-bar-val,
 [theme="dark-theme"] .mnz-dse-bar-lbl,
 [theme="dark-theme"] .mnz-dse-empty,
 [theme="hc-dark"] .mnz-dse-label,
 [theme="hc-dark"] .mnz-dse-k,
 [theme="hc-dark"] .mnz-dse-section-title,
+[theme="hc-dark"] .mnz-dse-bar-val,
 [theme="hc-dark"] .mnz-dse-bar-lbl,
 [theme="hc-dark"] .mnz-dse-empty {
 	color: #9ca3af;
