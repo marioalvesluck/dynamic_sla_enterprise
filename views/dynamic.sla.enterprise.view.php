@@ -53,6 +53,9 @@ $sheet->addItem((new CDiv([
 		(new CTextBox('dse-save-view-name', ''))
 			->setId('dse-save-view-name')
 			->setAttribute('placeholder', _('View name')),
+		(new CDiv())
+			->setId('dse-save-view-warning')
+			->addClass('mnz-dse-save-warning'),
 		(new CDiv([
 			(new CButton('dse-save-view-confirm', _('Save')))->setId('dse-save-view-confirm')->addClass(ZBX_STYLE_BTN_ALT),
 			(new CButton('dse-save-view-cancel', _('Cancel')))->setId('dse-save-view-cancel')->addClass(ZBX_STYLE_BTN_ALT)

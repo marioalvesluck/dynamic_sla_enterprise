@@ -20,6 +20,7 @@ jQuery(function() {
 		savedViews: CACHE_NS + '_saved_views'
 	};
 	var activeSavedViewId = null;
+	var pendingOverwriteViewId = null;
 
 	function fmtDateInput(ts) {
 		var dt = new Date(ts * 1000);
@@ -210,6 +211,16 @@ jQuery(function() {
 		}
 
 		if (found >= 0) {
+			var overwriteId = String(views[found].id || '');
+			if (pendingOverwriteViewId !== overwriteId) {
+				pendingOverwriteViewId = overwriteId;
+				jQuery('#dse-save-view-warning')
+					.addClass('is-open')
+					.text('A view named "' + name + '" already exists. Click Overwrite to replace it.');
+				jQuery('#dse-save-view-confirm').text('Overwrite');
+				setStatus('Confirm overwrite for duplicated view name.', 'error');
+				return;
+			}
 			views[found].state = state;
 			views[found].updated_at = Date.now();
 			activeSavedViewId = String(views[found].id || '');
@@ -231,12 +242,20 @@ jQuery(function() {
 		setStatus('View saved: ' + name, 'ok');
 	}
 
+	function resetSaveDialogState() {
+		pendingOverwriteViewId = null;
+		jQuery('#dse-save-view-warning').removeClass('is-open').text('');
+		jQuery('#dse-save-view-confirm').text('Save');
+	}
+
 	function openSaveAsDialog() {
+		resetSaveDialogState();
 		jQuery('#dse-save-view-name').val('').trigger('focus');
 		jQuery('#dse-save-overlay').addClass('is-open');
 	}
 
 	function closeSaveAsDialog() {
+		resetSaveDialogState();
 		jQuery('#dse-save-overlay').removeClass('is-open');
 	}
 
@@ -1505,6 +1524,11 @@ jQuery(function() {
 		if (e.key === 'Escape') {
 			e.preventDefault();
 			closeSaveAsDialog();
+		}
+	});
+	jQuery('#dse-save-view-name').on('input', function() {
+		if (pendingOverwriteViewId !== null) {
+			resetSaveDialogState();
 		}
 	});
 	jQuery('#dse-save-overlay').on('click', function(e) {

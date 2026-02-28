@@ -84,6 +84,13 @@
 	color: #e5e7eb;
 }
 
+[theme="dark-theme"] .mnz-dse-save-warning,
+[theme="hc-dark"] .mnz-dse-save-warning {
+	border-color: rgba(251, 191, 36, 0.35);
+	background: rgba(180, 83, 9, 0.2);
+	color: #fde68a;
+}
+
 [theme="dark-theme"] .mnz-dse-ms-toggle,
 [theme="hc-dark"] .mnz-dse-ms-toggle {
 	background: #363636;
