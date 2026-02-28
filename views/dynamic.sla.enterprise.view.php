@@ -14,11 +14,6 @@ $html_page = (new CHtmlPage())
 						->addClass(ZBX_STYLE_BTN_ALT)
 				)
 				->addItem(
-					(new CButton('dse-quick-print', _('Quick print')))
-						->setId('dse-quick-print')
-						->addClass(ZBX_STYLE_BTN_ALT)
-				)
-				->addItem(
 					(new CSelect('dse-report-persona'))
 						->setId('dse-report-persona')
 						->addOptions([

@@ -1685,10 +1685,6 @@ jQuery(function() {
 		e.preventDefault();
 		openReport(false);
 	});
-	jQuery('#dse-quick-print').on('click', function(e) {
-		e.preventDefault();
-		window.print();
-	});
 	jQuery('#dse-clear-cache').on('click', function(e) {
 		e.preventDefault();
 		clearAllCache();
