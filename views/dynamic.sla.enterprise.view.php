@@ -28,6 +28,11 @@ $html_page = (new CHtmlPage())
 						])
 				)
 				->addItem(
+					(new CButton('dse-clear-cache', _('Clear cache')))
+						->setId('dse-clear-cache')
+						->addClass(ZBX_STYLE_BTN_ALT)
+				)
+				->addItem(
 					(new CButton('go_problems', _('Back to Problems')))
 						->setAttribute('onclick', "location.href='zabbix.php?action=problem.view'")
 				)

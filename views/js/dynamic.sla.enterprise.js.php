@@ -11,6 +11,13 @@ jQuery(function() {
 	var incidentMode = 'starts';
 	var lastCalculatedData = null;
 	var tablePagerState = {};
+	var CACHE_NS = 'mnz_dse_v1';
+	var CACHE_TTL_OPTIONS = 60 * 1000;
+	var CACHE_TTL_CALC = 120 * 1000;
+	var CACHE_KEYS = {
+		options: CACHE_NS + '_options',
+		calc: CACHE_NS + '_calc'
+	};
 
 	function fmtDateInput(ts) {
 		var dt = new Date(ts * 1000);
@@ -52,6 +59,82 @@ jQuery(function() {
 			.removeClass('mnz-dse-status-error mnz-dse-status-ok')
 			.addClass(type === 'error' ? 'mnz-dse-status-error' : 'mnz-dse-status-ok')
 			.text(message || '');
+	}
+
+	function readStorageJson(key, fallback) {
+		try {
+			var raw = window.localStorage.getItem(key);
+			if (!raw) {
+				return fallback;
+			}
+			var parsed = JSON.parse(raw);
+			return parsed && typeof parsed === 'object' ? parsed : fallback;
+		}
+		catch (e) {
+			return fallback;
+		}
+	}
+
+	function writeStorageJson(key, value) {
+		try {
+			window.localStorage.setItem(key, JSON.stringify(value || {}));
+		}
+		catch (e) {}
+	}
+
+	function removeStorageKeys() {
+		try { window.localStorage.removeItem(CACHE_KEYS.options); } catch (e) {}
+		try { window.localStorage.removeItem(CACHE_KEYS.calc); } catch (e) {}
+	}
+
+	function payloadHash(payload) {
+		var obj = {};
+		Object.keys(payload || {}).sort().forEach(function(k) {
+			obj[k] = payload[k];
+		});
+		return JSON.stringify(obj);
+	}
+
+	function getCachedResponse(storeKey, payload, ttlMs) {
+		var cache = readStorageJson(storeKey, {});
+		var key = payloadHash(payload);
+		var row = cache[key];
+		if (!row || typeof row !== 'object') {
+			return null;
+		}
+		var ts = Number(row.ts || 0);
+		if (!isFinite(ts) || (Date.now() - ts) > ttlMs) {
+			delete cache[key];
+			writeStorageJson(storeKey, cache);
+			return null;
+		}
+		return row.data || null;
+	}
+
+	function setCachedResponse(storeKey, payload, data) {
+		var cache = readStorageJson(storeKey, {});
+		var key = payloadHash(payload);
+		cache[key] = {
+			ts: Date.now(),
+			data: data || {}
+		};
+		writeStorageJson(storeKey, cache);
+	}
+
+	function isUsableCalcCache(data) {
+		if (!data || typeof data !== 'object') {
+			return false;
+		}
+		if (!data.summary || typeof data.summary !== 'object') {
+			return false;
+		}
+		if (!Array.isArray(data.top_triggers) || !Array.isArray(data.hosts_impact)) {
+			return false;
+		}
+		if (!Array.isArray(data.timeline)) {
+			return false;
+		}
+		return true;
 	}
 
 	function hasSelectedGroups() {
@@ -536,6 +619,38 @@ jQuery(function() {
 		populateSelect('#dse-triggerids', [], []);
 	}
 
+	function applyOptionsData(data, selectedGroups, selectedHosts, selectedTriggers, triggeredBy, sourceLabel) {
+		populateSelect('#dse-groupids', data.groups, selectedGroups);
+
+		if (triggeredBy === 'groups') {
+			selectedHosts = [];
+			selectedTriggers = [];
+		}
+		if (triggeredBy === 'hosts') {
+			selectedTriggers = [];
+		}
+
+		populateSelect('#dse-hostids', data.hosts, selectedHosts);
+		populateSelect('#dse-triggerids', data.triggers, selectedTriggers);
+
+		var msg = 'Options loaded: groups ' + (data.groups ? data.groups.length : 0) +
+			' | hosts ' + (data.hosts ? data.hosts.length : 0) +
+			' | triggers ' + (data.triggers ? data.triggers.length : 0);
+		if (sourceLabel) {
+			msg += ' | ' + sourceLabel;
+		}
+		setStatus(msg, 'ok');
+
+		if (!hasSelectedGroups()) {
+			setResultsCollapsed(true);
+			clearDependentSelectors();
+			setStatus('Select at least one Host group to enable calculation.', 'ok');
+		}
+		else {
+			setResultsCollapsed(false);
+		}
+	}
+
 	function loadOptions(triggeredBy) {
 		if (!hasSelectedGroups() && triggeredBy !== 'init' && triggeredBy !== 'groups') {
 			setResultsCollapsed(true);
@@ -559,6 +674,12 @@ jQuery(function() {
 		var selectedHosts = jQuery('#dse-hostids').val() || [];
 		var selectedTriggers = jQuery('#dse-triggerids').val() || [];
 
+		var cached = getCachedResponse(CACHE_KEYS.options, payload, CACHE_TTL_OPTIONS);
+		if (cached && cached.groups && cached.hosts && cached.triggers) {
+			applyOptionsData(cached, selectedGroups, selectedHosts, selectedTriggers, triggeredBy, 'cache:hit');
+			return jQuery.Deferred().resolve().promise();
+		}
+
 		jQuery('#dse-refresh-options').prop('disabled', true);
 		return jQuery.ajax({
 			url: 'zabbix.php?action=dynamic.sla.enterprise.data',
@@ -570,33 +691,9 @@ jQuery(function() {
 				return;
 			}
 			var data = res.data;
-			populateSelect('#dse-groupids', data.groups, selectedGroups);
-
-			if (triggeredBy === 'groups') {
-				selectedHosts = [];
-				selectedTriggers = [];
-			}
-			if (triggeredBy === 'hosts') {
-				selectedTriggers = [];
-			}
-
-			populateSelect('#dse-hostids', data.hosts, selectedHosts);
-			populateSelect('#dse-triggerids', data.triggers, selectedTriggers);
-			setStatus(
-				'Options loaded: groups ' + (data.groups ? data.groups.length : 0) +
-				' | hosts ' + (data.hosts ? data.hosts.length : 0) +
-				' | triggers ' + (data.triggers ? data.triggers.length : 0),
-				'ok'
-			);
-
-			if (!hasSelectedGroups()) {
-				setResultsCollapsed(true);
-				clearDependentSelectors();
-				setStatus('Select at least one Host group to enable calculation.', 'ok');
-			}
-			else {
-				setResultsCollapsed(false);
-			}
+			setCachedResponse(CACHE_KEYS.options, payload, data);
+			var sourceLabel = (data.cache && data.cache.hit) ? 'cache:server' : 'cache:miss';
+			applyOptionsData(data, selectedGroups, selectedHosts, selectedTriggers, triggeredBy, sourceLabel);
 		}).always(function() {
 			jQuery('#dse-refresh-options').prop('disabled', false);
 		});
@@ -777,18 +874,19 @@ jQuery(function() {
 			}
 		});
 
-		if (maxCount <= 0) {
-			jQuery('#dse-daily').html('<div class="mnz-dse-panel"><div class="mnz-dse-empty">' + (d.noDataLabel || 'No data') + '</div></div>');
-			return;
-		}
-
 		var bars = '<div class="mnz-dse-daily-bars">';
 		for (var hour = 0; hour < 24; hour++) {
 			var c = counts[hour];
 			var ts = fromTs + (hour * 3600);
 			var dt = new Date(ts * 1000);
 			var lbl = String(dt.getHours()).padStart(2, '0') + ':00';
-			var h = Math.max(4, (c / maxCount) * 88);
+			var h;
+			if (maxCount <= 0) {
+				h = 4;
+			}
+			else {
+				h = Math.max(4, (c / maxCount) * 88);
+			}
 			var tip = incidentTooltipLines(lbl, details[hour]).replace(/"/g, '&quot;');
 			bars += '<div class="mnz-dse-bar-item" title="' + tip + '">' +
 				'<span class="mnz-dse-bar-val">' + c + '</span>' +
@@ -1101,6 +1199,21 @@ jQuery(function() {
 
 		var payload = buildBasePayload();
 		payload.mode = 'calculate';
+		var cached = getCachedResponse(CACHE_KEYS.calc, payload, CACHE_TTL_CALC);
+		if (isUsableCalcCache(cached)) {
+			lastCalculatedData = cached;
+			renderExecutive(cached);
+			renderSummary(cached);
+			renderInsights(cached);
+			renderDaily(cached);
+			renderHeatmap(cached);
+			renderHostsImpact(cached);
+			renderTopTriggers(cached);
+			renderTimeline(cached);
+			setStatus('SLA calculation loaded from cache', 'ok');
+			btn.prop('disabled', false).text(d.runLabel || 'Calculate SLA');
+			return;
+		}
 
 		jQuery.ajax({
 			url: 'zabbix.php?action=dynamic.sla.enterprise.data',
@@ -1113,6 +1226,7 @@ jQuery(function() {
 				return;
 			}
 			lastCalculatedData = res.data;
+			setCachedResponse(CACHE_KEYS.calc, payload, res.data);
 			renderExecutive(res.data);
 			renderSummary(res.data);
 			renderInsights(res.data);
@@ -1126,6 +1240,21 @@ jQuery(function() {
 			setStatus(parseError(jqXHR, d.failedLabel || 'Failed to calculate SLA'), 'error');
 		}).always(function() {
 			btn.prop('disabled', false).text(d.runLabel || 'Calculate SLA');
+		});
+	}
+
+	function clearAllCache() {
+		removeStorageKeys();
+		jQuery.ajax({
+			url: 'zabbix.php?action=dynamic.sla.enterprise.data',
+			method: 'POST',
+			dataType: 'json',
+			data: {
+				mode: 'clear_cache',
+				clear_cache: '1'
+			}
+		}).always(function() {
+			setStatus('Dashboard cache cleared', 'ok');
 		});
 	}
 
@@ -1158,6 +1287,7 @@ jQuery(function() {
 	});
 	jQuery('#dse-refresh-options').on('click', function(e) {
 		e.preventDefault();
+		removeStorageKeys();
 		loadOptions('manual');
 	});
 	jQuery('#dse-run').on('click', function(e) {
@@ -1171,6 +1301,10 @@ jQuery(function() {
 	jQuery('#dse-quick-print').on('click', function(e) {
 		e.preventDefault();
 		openReport(true);
+	});
+	jQuery('#dse-clear-cache').on('click', function(e) {
+		e.preventDefault();
+		clearAllCache();
 	});
 	jQuery(document).on('click', '.mnz-dse-exclude-btn', function() {
 		appendExcludedTrigger(jQuery(this).data('triggerid'));

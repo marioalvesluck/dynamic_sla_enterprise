@@ -16,7 +16,7 @@
 
 .dse-rpt-page {
 	background: #fff;
-	border: 1px solid #dbe3ef;
+	border: 1px solid rgba(148, 163, 184, .30);
 	border-radius: 12px;
 	padding: 20px;
 	margin-bottom: 14px;
@@ -61,7 +61,7 @@
 }
 
 .dse-rpt-cover-card {
-	border: 1px solid #dbe3ef;
+	border: 1px solid rgba(148, 163, 184, .28);
 	border-radius: 10px;
 	padding: 10px;
 }
@@ -75,7 +75,7 @@
 }
 
 .dse-rpt-manager-strip {
-	border: 1px solid #dbe3ef;
+	border: 1px solid rgba(148, 163, 184, .28);
 	border-radius: 10px;
 	padding: 12px;
 	margin: 10px 0 12px;
@@ -169,30 +169,31 @@
 	padding: 4px 10px;
 	border-radius: 999px;
 	font-size: 12px;
-	font-weight: 800;
+	font-weight: 400;
 	border: 1px solid transparent;
+	line-height: 1.2;
 }
 
 .dse-rpt-pill-ok {
-	background: #dcfce7;
-	border-color: #86efac;
-	color: #166534;
+	background: #edf7f1;
+	border-color: rgba(34, 84, 61, .25);
+	color: #22543d;
 }
 
 .dse-rpt-pill-warn {
-	background: #fef3c7;
-	border-color: #fcd34d;
-	color: #92400e;
+	background: #fff8e8;
+	border-color: rgba(122, 91, 31, .25);
+	color: #7a5b1f;
 }
 
 .dse-rpt-pill-risk {
-	background: #fee2e2;
-	border-color: #fca5a5;
-	color: #991b1b;
+	background: #fdeeee;
+	border-color: rgba(127, 29, 29, .25);
+	color: #7f1d1d;
 }
 
 .dse-rpt-cover-trend {
-	border: 1px solid #dbe3ef;
+	border: 1px solid rgba(148, 163, 184, .28);
 	border-radius: 10px;
 	padding: 10px 10px 12px;
 	background: #fff;
@@ -281,7 +282,7 @@
 }
 
 .dse-rpt-info-card {
-	border: 1px solid #dbe4ef;
+	border: 1px solid rgba(148, 163, 184, .28);
 	border-radius: 8px;
 	padding: 10px;
 	background: #f8fbff;
@@ -292,7 +293,7 @@
 }
 
 .dse-rpt-chart-card {
-	border: 1px solid #dbe4ef;
+	border: 1px solid rgba(148, 163, 184, .28);
 	border-radius: 8px;
 	padding: 10px;
 	background: #f8fbff;
@@ -341,7 +342,7 @@
 }
 
 .dse-rpt-kpi-card {
-	border: 1px solid #dbe4ef;
+	border: 1px solid rgba(148, 163, 184, .28);
 	border-radius: 8px;
 	padding: 10px;
 	background: #f8fbff;
@@ -363,11 +364,12 @@
 	color: #64748b;
 	font-weight: 700;
 	background: #f8fafc;
-	border-bottom: 1px solid #dbe3ef;
+	border-bottom: 1px solid rgba(148, 163, 184, .30);
 }
 
 .dse-rpt-table td {
 	font-size: 12px;
+	border-bottom: 1px solid rgba(148, 163, 184, .22);
 }
 
 .dse-rpt-table tr:nth-child(even) td {
@@ -382,9 +384,9 @@
 }
 
 .dse-rpt-pill-amber {
-	background: #fef3c7;
-	border-color: #fcd34d;
-	color: #92400e;
+	background: #fff8e8;
+	border-color: rgba(122, 91, 31, .25);
+	color: #7a5b1f;
 }
 
 .dse-rpt-host-impact-chart {
@@ -445,7 +447,103 @@ body.theme-hc-dark #dse-rpt-wrapper {
 body.theme-dark #dse-rpt-wrapper .dse-rpt-page,
 body.theme-hc-dark #dse-rpt-wrapper .dse-rpt-page {
 	background: #ffffff !important;
+	border-color: rgba(148, 163, 184, .30) !important;
+}
+
+[theme="dark-theme"] #dse-rpt-wrapper *,
+[theme="hc-dark"] #dse-rpt-wrapper *,
+body.theme-dark #dse-rpt-wrapper *,
+body.theme-hc-dark #dse-rpt-wrapper * {
+	color: #0f172a !important;
+}
+
+[theme="dark-theme"] #dse-rpt-wrapper .dse-rpt-cover-card,
+[theme="hc-dark"] #dse-rpt-wrapper .dse-rpt-cover-card,
+body.theme-dark #dse-rpt-wrapper .dse-rpt-cover-card,
+body.theme-hc-dark #dse-rpt-wrapper .dse-rpt-cover-card,
+[theme="dark-theme"] #dse-rpt-wrapper .dse-rpt-kpi-card,
+[theme="hc-dark"] #dse-rpt-wrapper .dse-rpt-kpi-card,
+body.theme-dark #dse-rpt-wrapper .dse-rpt-kpi-card,
+body.theme-hc-dark #dse-rpt-wrapper .dse-rpt-kpi-card,
+[theme="dark-theme"] #dse-rpt-wrapper .dse-rpt-info-card,
+[theme="hc-dark"] #dse-rpt-wrapper .dse-rpt-info-card,
+body.theme-dark #dse-rpt-wrapper .dse-rpt-info-card,
+body.theme-hc-dark #dse-rpt-wrapper .dse-rpt-info-card,
+[theme="dark-theme"] #dse-rpt-wrapper .dse-rpt-chart-card,
+[theme="hc-dark"] #dse-rpt-wrapper .dse-rpt-chart-card,
+body.theme-dark #dse-rpt-wrapper .dse-rpt-chart-card,
+body.theme-hc-dark #dse-rpt-wrapper .dse-rpt-chart-card {
+	background: #f8fbff !important;
+	border-color: rgba(148, 163, 184, .28) !important;
+}
+
+[theme="dark-theme"] #dse-rpt-wrapper .dse-rpt-table,
+[theme="hc-dark"] #dse-rpt-wrapper .dse-rpt-table,
+body.theme-dark #dse-rpt-wrapper .dse-rpt-table,
+body.theme-hc-dark #dse-rpt-wrapper .dse-rpt-table {
+	background: #ffffff !important;
 	border-color: #dbe3ef !important;
+}
+
+[theme="dark-theme"] #dse-rpt-wrapper .dse-rpt-table th,
+[theme="hc-dark"] #dse-rpt-wrapper .dse-rpt-table th,
+body.theme-dark #dse-rpt-wrapper .dse-rpt-table th,
+body.theme-hc-dark #dse-rpt-wrapper .dse-rpt-table th {
+	background: #f8fafc !important;
+	color: #64748b !important;
+	border-color: rgba(148, 163, 184, .30) !important;
+}
+
+[theme="dark-theme"] #dse-rpt-wrapper .dse-rpt-table td,
+[theme="hc-dark"] #dse-rpt-wrapper .dse-rpt-table td,
+body.theme-dark #dse-rpt-wrapper .dse-rpt-table td,
+body.theme-hc-dark #dse-rpt-wrapper .dse-rpt-table td {
+	background: #ffffff !important;
+	color: #0f172a !important;
+	border-color: rgba(148, 163, 184, .22) !important;
+}
+
+[theme="dark-theme"] #dse-rpt-wrapper .dse-rpt-table tr:nth-child(even) td,
+[theme="hc-dark"] #dse-rpt-wrapper .dse-rpt-table tr:nth-child(even) td,
+body.theme-dark #dse-rpt-wrapper .dse-rpt-table tr:nth-child(even) td,
+body.theme-hc-dark #dse-rpt-wrapper .dse-rpt-table tr:nth-child(even) td {
+	background: #f8fbff !important;
+}
+
+[theme="dark-theme"] #dse-rpt-wrapper .dse-rpt-pill-ok,
+[theme="hc-dark"] #dse-rpt-wrapper .dse-rpt-pill-ok,
+body.theme-dark #dse-rpt-wrapper .dse-rpt-pill-ok,
+body.theme-hc-dark #dse-rpt-wrapper .dse-rpt-pill-ok {
+	background: #edf7f1 !important;
+	border-color: rgba(34, 84, 61, .25) !important;
+	color: #22543d !important;
+}
+
+[theme="dark-theme"] #dse-rpt-wrapper .dse-rpt-pill-warn,
+[theme="hc-dark"] #dse-rpt-wrapper .dse-rpt-pill-warn,
+body.theme-dark #dse-rpt-wrapper .dse-rpt-pill-warn,
+body.theme-hc-dark #dse-rpt-wrapper .dse-rpt-pill-warn {
+	background: #fff8e8 !important;
+	border-color: rgba(122, 91, 31, .25) !important;
+	color: #7a5b1f !important;
+}
+
+[theme="dark-theme"] #dse-rpt-wrapper .dse-rpt-pill-risk,
+[theme="hc-dark"] #dse-rpt-wrapper .dse-rpt-pill-risk,
+body.theme-dark #dse-rpt-wrapper .dse-rpt-pill-risk,
+body.theme-hc-dark #dse-rpt-wrapper .dse-rpt-pill-risk {
+	background: #fdeeee !important;
+	border-color: rgba(127, 29, 29, .25) !important;
+	color: #7f1d1d !important;
+}
+
+[theme="dark-theme"] #dse-rpt-wrapper .dse-rpt-pill-amber,
+[theme="hc-dark"] #dse-rpt-wrapper .dse-rpt-pill-amber,
+body.theme-dark #dse-rpt-wrapper .dse-rpt-pill-amber,
+body.theme-hc-dark #dse-rpt-wrapper .dse-rpt-pill-amber {
+	background: #fff8e8 !important;
+	border-color: rgba(122, 91, 31, .25) !important;
+	color: #7a5b1f !important;
 }
 
 @media (max-width: 1100px) {

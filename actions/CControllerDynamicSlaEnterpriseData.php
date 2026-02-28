@@ -8,6 +8,10 @@ use CRoleHelper;
 use Throwable;
 
 class CControllerDynamicSlaEnterpriseData extends CController {
+	private const OPTIONS_CACHE_TTL = 60;
+	private const CALC_CACHE_TTL = 120;
+
+	private static $response_cache = [];
 
 	protected function init(): void {
 		$this->disableCsrfValidation();
@@ -49,12 +53,47 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 
 		try {
 			$mode = (string) $this->getInput('mode', 'calculate');
-			if ($mode === 'options') {
-				echo $this->encodeJson(['success' => true, 'data' => $this->buildOptionsPayload()]);
+			if ($mode === 'clear_cache' || ((int) $this->getInput('clear_cache', '0') === 1)) {
+				$this->clearResponseCache();
+				echo $this->encodeJson([
+					'success' => true,
+					'data' => [
+						'cleared' => true
+					]
+				]);
 				exit;
 			}
 
-			echo $this->encodeJson(['success' => true, 'data' => $this->buildCalculationPayload()]);
+			$cache_key = $this->buildResponseCacheKey($mode);
+			$cached_payload = $this->getResponseFromCache($cache_key);
+			if ($cached_payload !== null) {
+				$cached_payload['cache'] = [
+					'hit' => true,
+					'mode' => $mode
+				];
+				echo $this->encodeJson(['success' => true, 'data' => $cached_payload]);
+				exit;
+			}
+
+			$data = [];
+			if ($mode === 'options') {
+				$data = $this->buildOptionsPayload();
+				$data['cache'] = [
+					'hit' => false,
+					'mode' => $mode
+				];
+				$this->saveResponseToCache($cache_key, $data, self::OPTIONS_CACHE_TTL);
+				echo $this->encodeJson(['success' => true, 'data' => $data]);
+				exit;
+			}
+
+			$data = $this->buildCalculationPayload();
+			$data['cache'] = [
+				'hit' => false,
+				'mode' => $mode
+			];
+			$this->saveResponseToCache($cache_key, $data, self::CALC_CACHE_TTL);
+			echo $this->encodeJson(['success' => true, 'data' => $data]);
 			exit;
 		}
 		catch (Throwable $e) {
@@ -67,6 +106,58 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			]);
 			exit;
 		}
+	}
+
+	private function buildResponseCacheKey(string $mode): string {
+		$fields = [
+			'mode' => strtolower(trim($mode)),
+			'groupids' => (string) $this->getInput('groupids', ''),
+			'hostids' => (string) $this->getInput('hostids', ''),
+			'triggerids' => (string) $this->getInput('triggerids', ''),
+			'severity' => (string) $this->getInput('severity', ''),
+			'severity_explicit' => (string) $this->getInput('severity_explicit', ''),
+			'impact_level' => (string) $this->getInput('impact_level', 'all'),
+			'exclude_triggerids' => (string) $this->getInput('exclude_triggerids', ''),
+			'period' => (string) $this->getInput('period', '30d'),
+			'from' => (string) $this->getInput('from', ''),
+			'to' => (string) $this->getInput('to', ''),
+			'business_mode' => (string) $this->getInput('business_mode', 'business_mf_8_18'),
+			'business_start' => (string) $this->getInput('business_start', '08:00'),
+			'business_end' => (string) $this->getInput('business_end', '18:00'),
+			'exclude_maintenance' => (string) $this->getInput('exclude_maintenance', '1'),
+			'slo_target' => (string) $this->getInput('slo_target', '99.9'),
+			'userid' => (string) $this->getUserType()
+		];
+
+		ksort($fields);
+		return sha1(json_encode($fields, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '');
+	}
+
+	private function getResponseFromCache(string $key): ?array {
+		if (!isset(self::$response_cache[$key])) {
+			return null;
+		}
+
+		$row = self::$response_cache[$key];
+		$expiry = (int) ($row['expiry'] ?? 0);
+		if ($expiry <= time()) {
+			unset(self::$response_cache[$key]);
+			return null;
+		}
+
+		$data = $row['data'] ?? null;
+		return is_array($data) ? $data : null;
+	}
+
+	private function saveResponseToCache(string $key, array $data, int $ttl): void {
+		self::$response_cache[$key] = [
+			'expiry' => time() + max(1, $ttl),
+			'data' => $data
+		];
+	}
+
+	private function clearResponseCache(): void {
+		self::$response_cache = [];
 	}
 
 	private function buildOptionsPayload(): array {
