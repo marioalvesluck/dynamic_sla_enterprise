@@ -28,6 +28,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'hostids' => 'string',
 			'triggerids' => 'string',
 			'severity' => 'string',
+			'severity_explicit' => 'string',
 			'exclude_triggerids' => 'string',
 			'period' => 'string',
 			'from' => 'string',
@@ -71,11 +72,13 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		$groupids = $this->parseIds((string) $this->getInput('groupids', ''));
 		$hostids = $this->parseIds((string) $this->getInput('hostids', ''));
 		$triggerids = $this->parseIds((string) $this->getInput('triggerids', ''));
-		$severities = $this->parseSeverities((string) $this->getInput('severity', ''));
+		$severity_explicit = ((string) $this->getInput('severity_explicit', '0') === '1');
+		$severities = $severity_explicit ? $this->parseSeverities((string) $this->getInput('severity', '')) : [];
 		$debug = [
 			'input_groupids' => $groupids,
 			'input_hostids' => $hostids,
-			'input_severity' => $severities
+			'input_severity' => $severities,
+			'severity_explicit' => $severity_explicit
 		];
 
 		[$from_ts, $to_ts] = $this->resolveWindow(
@@ -136,8 +139,16 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			}));
 		}
 
-		$window_triggerids = $this->collectTriggerIdsWithIncidentsInWindow($from_ts, $to_ts, $groupids, $hostids, $severities);
+		$window_trace = [];
+		$window_triggerids = $this->collectTriggerIdsWithIncidentsInWindowTrace($from_ts, $to_ts, $groupids, $hostids, $severities, $window_trace);
 		$debug['window_triggerids_count'] = count($window_triggerids);
+		$debug['window_trace'] = $window_trace;
+		if (!$window_triggerids && ($groupids || $hostids || $severities)) {
+			$problem_screen_trace = [];
+			$window_triggerids = $this->fallbackTriggerIdsFromProblemsScreenStyleTrace($groupids, $hostids, $severities, $problem_screen_trace);
+			$debug['problem_screen_triggerids_count'] = count($window_triggerids);
+			$debug['problem_screen_trace'] = $problem_screen_trace;
+		}
 
 		$triggers = [];
 		if ($window_triggerids) {
@@ -246,47 +257,46 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 
 		$groupids = $this->parseIds((string) $this->getInput('groupids', ''));
 		$hostids = $this->parseIds((string) $this->getInput('hostids', ''));
-		$triggerids = $this->parseIds((string) $this->getInput('triggerids', ''));
-		$severities = $this->parseSeverities((string) $this->getInput('severity', ''));
-		$selected_triggerids = $triggerids;
+		$requested_triggerids = $this->parseIds((string) $this->getInput('triggerids', ''));
+		$severity_explicit = ((string) $this->getInput('severity_explicit', '0') === '1');
+		$severities = $severity_explicit ? $this->parseSeverities((string) $this->getInput('severity', '')) : [];
 		$exclude_triggerids = array_flip($this->parseIds((string) $this->getInput('exclude_triggerids', '')));
+
+		$window_triggerids = $this->collectTriggerIdsWithIncidentsInWindow($from_ts, $to_ts, $groupids, $hostids, $severities);
+		$triggerids = $window_triggerids;
+		if (!$triggerids && ($groupids || $hostids || $severities || $requested_triggerids)) {
+			$triggerids = $this->fallbackTriggerIdsFromProblemsScreenStyle($groupids, $hostids, $severities);
+		}
+		if ($requested_triggerids) {
+			$requested_set = array_flip($requested_triggerids);
+			$triggerids = array_values(array_filter($triggerids, static function(int $tid) use ($requested_set): bool {
+				return isset($requested_set[$tid]);
+			}));
+			if (!$triggerids) {
+				$triggerids = $requested_triggerids;
+			}
+		}
+
+		if (!$triggerids && ($groupids || $hostids || $severities || $requested_triggerids)) {
+			$triggerids = $this->fallbackTriggerIdsFromProblems($groupids, $hostids, $severities);
+		}
+		if (!$triggerids && ($groupids || $hostids || $severities || $requested_triggerids)) {
+			$triggerids = $this->fallbackTriggerIdsFromEvents($from_ts, $to_ts, $groupids, $hostids, $severities);
+		}
 
 		$resolved = $this->resolveEntities($groupids, $hostids, $triggerids, $severities);
 		$triggerids = $resolved['triggerids'];
 		$hostids = $resolved['hostids'];
 		$trigger_map = $resolved['trigger_map'];
-		$resolved_triggerids = $triggerids;
-		if (!$triggerids && ($groupids || $hostids)) {
-			$fallback_problem_ids = $this->fallbackTriggerIdsFromProblems($groupids, $hostids, $severities);
-			if ($fallback_problem_ids) {
-				$resolved_fb = $this->resolveEntities($groupids, $hostids, $fallback_problem_ids, $severities);
-				$triggerids = $resolved_fb['triggerids'];
-				$hostids = $resolved_fb['hostids'];
-				$trigger_map = $resolved_fb['trigger_map'];
-				$resolved_triggerids = $triggerids;
-			}
-		}
-		if (!$triggerids && ($groupids || $hostids)) {
-			$fallback_ids = $this->fallbackTriggerIdsFromEvents($from_ts, $to_ts, $groupids, $hostids, $severities);
-			if ($fallback_ids) {
-				$resolved_fb = $this->resolveEntities($groupids, $hostids, $fallback_ids, $severities);
-				$triggerids = $resolved_fb['triggerids'];
-				$hostids = $resolved_fb['hostids'];
-				$trigger_map = $resolved_fb['trigger_map'];
-				$resolved_triggerids = $triggerids;
-			}
-		}
 
-		$window_problem_ids = $this->findTriggersWithProblemsInWindow($triggerids, $from_ts, $to_ts);
-		$selected_trigger_set = array_flip($selected_triggerids);
-		if (!$window_problem_ids && !$selected_trigger_set) {
-			$triggerids = $resolved_triggerids;
-		}
-		else {
-			$triggerids = array_values(array_unique(array_map('intval', array_merge(
-				array_map('intval', array_keys($window_problem_ids)),
-				array_map('intval', array_keys($selected_trigger_set))
-			))));
+		if ($requested_triggerids) {
+			$requested_set = array_flip($requested_triggerids);
+			$triggerids = array_values(array_filter($triggerids, static function(int $tid) use ($requested_set): bool {
+				return isset($requested_set[$tid]);
+			}));
+			$trigger_map = array_filter($trigger_map, static function(string $tid) use ($requested_set): bool {
+				return isset($requested_set[(int) $tid]);
+			}, ARRAY_FILTER_USE_KEY);
 		}
 
 		if (!$triggerids) {
@@ -627,47 +637,94 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 	}
 
 	private function collectTriggerIdsWithIncidentsInWindow(int $from_ts, int $to_ts, array $groupids, array $hostids, array $severities): array {
-		$triggerids = [];
+		$trace = [];
+		return $this->collectTriggerIdsWithIncidentsInWindowTrace($from_ts, $to_ts, $groupids, $hostids, $severities, $trace);
+	}
 
-		$events = API::Event()->get([
-			'output' => ['objectid'],
-			'source' => EVENT_SOURCE_TRIGGERS,
-			'object' => EVENT_OBJECT_TRIGGER,
-			'time_from' => $from_ts,
-			'time_till' => $to_ts,
-			'sortfield' => ['clock', 'eventid'],
-			'sortorder' => 'DESC',
-			'limit' => 200000,
-			'preservekeys' => false
-		]);
+	private function collectTriggerIdsWithIncidentsInWindowTrace(int $from_ts, int $to_ts, array $groupids, array $hostids, array $severities, array &$trace): array {
+		// 1) Build candidate trigger set from current filters.
+		$candidate_params = [
+			'output' => ['triggerid'],
+			'preservekeys' => false,
+			'limit' => 20000
+		];
+		if ($groupids) {
+			$candidate_params['groupids'] = $groupids;
+		}
+		if ($hostids) {
+			$candidate_params['hostids'] = $hostids;
+		}
+		if ($severities) {
+			$candidate_params['filter'] = ['priority' => $severities];
+		}
+		$trace['candidate_params'] = $candidate_params;
 
-		foreach ($events as $event) {
-			$tid = (int) ($event['objectid'] ?? 0);
-			if ($tid > 0) {
-				$triggerids[$tid] = $tid;
-			}
+		$candidates = API::Trigger()->get($candidate_params);
+		$trace['candidate_count'] = is_array($candidates) ? count($candidates) : 0;
+		if (!$candidates) {
+			$trace['stage'] = 'no_candidates';
+			return [];
+		}
+		$candidate_triggerids = array_values(array_unique(array_map('intval', array_column($candidates, 'triggerid'))));
+		$trace['candidate_triggerids_count'] = count($candidate_triggerids);
+		if (!$candidate_triggerids) {
+			$trace['stage'] = 'no_candidate_ids';
+			return [];
 		}
 
-		$problems_params = [
-			'output' => ['objectid', 'clock', 'severity'],
+		// 2) Keep only triggers that have incident activity in the selected window
+		// (including incidents that started before window and remained active).
+		$in_window = $this->findTriggersWithProblemsInWindow($candidate_triggerids, $from_ts, $to_ts);
+		$trace['in_window_count'] = count($in_window);
+		if (!$in_window) {
+			$trace['stage'] = 'no_incidents_in_window';
+			return [];
+		}
+
+		$valid = API::Trigger()->get([
+			'output' => ['triggerid'],
+			'triggerids' => array_keys($in_window),
+			'preservekeys' => false
+		]);
+		$out = array_values(array_unique(array_map('intval', array_column($valid, 'triggerid'))));
+		$trace['valid_count'] = count($out);
+		$trace['sample_triggerids'] = array_slice($out, 0, 20);
+		$trace['stage'] = 'ok';
+		return $out;
+	}
+
+	private function fallbackTriggerIdsFromProblemsScreenStyle(array $groupids, array $hostids, array $severities): array {
+		$trace = [];
+		return $this->fallbackTriggerIdsFromProblemsScreenStyleTrace($groupids, $hostids, $severities, $trace);
+	}
+
+	private function fallbackTriggerIdsFromProblemsScreenStyleTrace(array $groupids, array $hostids, array $severities, array &$trace): array {
+		$params = [
+			'output' => ['eventid', 'objectid', 'clock', 'severity', 'cause_eventid'],
 			'source' => EVENT_SOURCE_TRIGGERS,
 			'object' => EVENT_OBJECT_TRIGGER,
 			'recent' => true,
-			'limit' => 100000,
+			'limit' => 1001,
 			'preservekeys' => false
 		];
+
 		if ($groupids) {
-			$problems_params['groupids'] = $groupids;
+			$params['groupids'] = $groupids;
 		}
 		if ($hostids) {
-			$problems_params['hostids'] = $hostids;
+			$params['hostids'] = $hostids;
 		}
-		$problems = API::Problem()->get($problems_params);
+		$trace['params'] = $params;
+
+		$problems = API::Problem()->get($params);
+		$trace['problems_count'] = is_array($problems) ? count($problems) : 0;
+		if (!$problems) {
+			$trace['stage'] = 'no_problems';
+			return [];
+		}
+
+		$triggerids = [];
 		foreach ($problems as $problem) {
-			$clock = (int) ($problem['clock'] ?? 0);
-			if ($clock > $to_ts) {
-				continue;
-			}
 			$sev = (int) ($problem['severity'] ?? -1);
 			if ($severities && !in_array($sev, $severities, true)) {
 				continue;
@@ -678,27 +735,11 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			}
 		}
 
-		if (!$triggerids) {
-			return [];
-		}
-
-		$valid_params = [
-			'output' => ['triggerid'],
-			'triggerids' => array_values($triggerids),
-			'preservekeys' => false
-		];
-		if ($groupids) {
-			$valid_params['groupids'] = $groupids;
-		}
-		if ($hostids) {
-			$valid_params['hostids'] = $hostids;
-		}
-		if ($severities) {
-			$valid_params['filter'] = ['priority' => $severities];
-		}
-
-		$valid = API::Trigger()->get($valid_params);
-		return array_values(array_unique(array_map('intval', array_column($valid, 'triggerid'))));
+		$out = array_values($triggerids);
+		$trace['out_count'] = count($out);
+		$trace['sample_triggerids'] = array_slice($out, 0, 20);
+		$trace['stage'] = 'ok';
+		return $out;
 	}
 
 	private function fallbackTriggerIdsFromProblems(array $groupids, array $hostids, array $severities): array {

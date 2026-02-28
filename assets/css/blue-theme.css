@@ -201,6 +201,24 @@
 	color: #b91c1c;
 }
 
+.mnz-dse-debug {
+	margin: 0 0 10px;
+}
+
+.mnz-dse-debug-pre {
+	margin: 0;
+	padding: 10px 12px;
+	background: #0b1220;
+	color: #c7f9ff;
+	border: 1px solid #1f2a44;
+	border-radius: 6px;
+	font: 12px/1.4 Consolas, "Courier New", monospace;
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 280px;
+	overflow: auto;
+}
+
 .mnz-dse-cards {
 	display: grid;
 	grid-template-columns: repeat(6, minmax(0, 1fr));

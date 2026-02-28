@@ -68,6 +68,13 @@
 	color: #d1d5db;
 }
 
+[theme="dark-theme"] .mnz-dse-debug-pre,
+[theme="hc-dark"] .mnz-dse-debug-pre {
+	background: #060a14;
+	color: #b7f8ff;
+	border-color: #1d2b4a;
+}
+
 [theme="dark-theme"] .mnz-dse-gap-good,
 [theme="dark-theme"] .mnz-dse-status-good,
 [theme="hc-dark"] .mnz-dse-gap-good,

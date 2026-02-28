@@ -4,8 +4,8 @@
 	"name": "Dynamic SLA Enterprise",
 	"version": "1.0",
 	"namespace": "DynamicSlaEnterprise",
-	"author": "Monzphere",
-	"url": "https://monzphere.com",
+	"author": "Mario Alves",
+	"url": "",
 	"description": "Enterprise dynamic SLA analytics from incidents with multi filters.",
 	"actions": {
 		"dynamic.sla.enterprise.view": {

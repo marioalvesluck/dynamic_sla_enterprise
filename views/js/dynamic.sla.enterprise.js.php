@@ -34,6 +34,26 @@ jQuery(function() {
 			.text(message || '');
 	}
 
+	function renderDebugJson(debugObj) {
+		var $box = jQuery('#dse-debug');
+		if (!$box.length) {
+			return;
+		}
+		if (!debugObj || typeof debugObj !== 'object') {
+			$box.empty();
+			return;
+		}
+		var json = '';
+		try {
+			json = JSON.stringify(debugObj, null, 2);
+		}
+		catch (e) {
+			json = String(debugObj);
+		}
+		$box.html('<pre class="mnz-dse-debug-pre"></pre>');
+		$box.find('pre').text(json);
+	}
+
 	function selectedCsv(id) {
 		var vals = jQuery(id).val() || [];
 		if (!Array.isArray(vals)) {
@@ -179,9 +199,6 @@ jQuery(function() {
 			return;
 		}
 		if ($sev.find('option').length > 0) {
-			if ($sev.val() === null) {
-				$sev.val('');
-			}
 			return;
 		}
 		$sev.html(
@@ -193,12 +210,21 @@ jQuery(function() {
 			'<option value="4">High</option>' +
 			'<option value="5">Disaster</option>'
 		);
-		$sev.val('');
 	}
 
 	function setupMultiSelects() {
 		ensureSeverityOptions();
 		initMs('#dse-groupids', 'All groups');
+		initMs('#dse-hostids', 'All hosts');
+		initMs('#dse-triggerids', 'All triggers');
+		initMs('#dse-severity', 'All severities');
+		var $sev = jQuery('#dse-severity');
+		if ($sev.length && !$sev.data('mnz-sev-default-cleared')) {
+			$sev.find('option').prop('selected', false);
+			$sev.data('mnz-sev-default-cleared', true);
+			$sev.data('mnz-sev-user-set', false);
+			rebuildMsOptions('#dse-severity');
+		}
 	}
 
 	function applyPeriodPreset() {
@@ -224,6 +250,7 @@ jQuery(function() {
 	}
 
 	function buildBasePayload() {
+		var severityExplicit = jQuery('#dse-severity').data('mnz-sev-user-set') ? '1' : '0';
 		return {
 			period: jQuery('#dse-period').val(),
 			from: jQuery('#dse-from').val(),
@@ -232,6 +259,7 @@ jQuery(function() {
 			hostids: selectedCsv('#dse-hostids'),
 			triggerids: selectedCsv('#dse-triggerids'),
 			severity: selectedCsv('#dse-severity'),
+			severity_explicit: severityExplicit,
 			exclude_triggerids: jQuery('#dse-exclude-triggerids').val(),
 			business_mode: jQuery('#dse-business-mode').val(),
 			business_start: jQuery('#dse-business-start').val(),
@@ -260,7 +288,7 @@ jQuery(function() {
 				text.replace(/</g, '&lt;') + '</option>';
 		});
 		jQuery(id).html(html);
-		if (id === '#dse-groupids') {
+		if (jQuery(id).data('mnz-ms-init')) {
 			rebuildMsOptions(id);
 		}
 	}
@@ -304,10 +332,30 @@ jQuery(function() {
 
 			populateSelect('#dse-hostids', data.hosts, selectedHosts);
 			populateSelect('#dse-triggerids', data.triggers, selectedTriggers);
+			renderDebugJson(data.debug || null);
+			var debugTxt = '';
+			if (data.debug) {
+				var dbgParts = [];
+				if (typeof data.debug.window_triggerids_count !== 'undefined') {
+					dbgParts.push('window=' + data.debug.window_triggerids_count);
+				}
+				if (typeof data.debug.problem_screen_triggerids_count !== 'undefined') {
+					dbgParts.push('problem.screen=' + data.debug.problem_screen_triggerids_count);
+				}
+				if (typeof data.debug.problem_fallback_ids_count !== 'undefined') {
+					dbgParts.push('problem=' + data.debug.problem_fallback_ids_count);
+				}
+				if (typeof data.debug.event_fallback_ids_count !== 'undefined') {
+					dbgParts.push('event=' + data.debug.event_fallback_ids_count);
+				}
+				if (dbgParts.length) {
+					debugTxt = ' | debug: ' + dbgParts.join(' / ');
+				}
+			}
 			setStatus(
 				'Options loaded: groups ' + (data.groups ? data.groups.length : 0) +
 				' | hosts ' + (data.hosts ? data.hosts.length : 0) +
-				' | triggers ' + (data.triggers ? data.triggers.length : 0),
+				' | triggers ' + (data.triggers ? data.triggers.length : 0) + debugTxt,
 				'ok'
 			);
 		}).always(function() {
@@ -527,6 +575,7 @@ jQuery(function() {
 		loadOptions('hosts');
 	});
 	jQuery('#dse-severity').on('change', function() {
+		jQuery('#dse-severity').data('mnz-sev-user-set', true);
 		loadOptions('severity');
 	});
 	jQuery('#dse-refresh-options').on('click', function(e) {
