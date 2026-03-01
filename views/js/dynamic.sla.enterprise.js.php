@@ -23,6 +23,45 @@ jQuery(function() {
 	var activeSavedViewId = null;
 	var pendingOverwriteViewId = null;
 	var problemPagerState = { page: 1, limit: 25 };
+	var tagSuggestions = { keys: [], values_by_key: {} };
+
+	function normTagOp(op) {
+		var v = String(op || '').toLowerCase();
+		if (v === 'contains' || v === 'exists') {
+			return v;
+		}
+		return 'equals';
+	}
+
+	function normTagJoin(join) {
+		return String(join || '').toLowerCase() === 'or' ? 'or' : 'and';
+	}
+
+	function normalizeTagRules(rules) {
+		var out = [];
+		(Array.isArray(rules) ? rules : []).forEach(function(rule, idx) {
+			if (!rule || typeof rule !== 'object') {
+				return;
+			}
+			var key = String(rule.key || '').trim();
+			var operator = normTagOp(rule.operator);
+			var value = String(rule.value || '').trim();
+			var join = normTagJoin(rule.join);
+			if (!key) {
+				return;
+			}
+			if (operator !== 'exists' && !value) {
+				return;
+			}
+			out.push({
+				join: idx === 0 ? 'and' : join,
+				key: key,
+				operator: operator,
+				value: value
+			});
+		});
+		return out;
+	}
 
 	function fmtDateInput(ts) {
 		var dt = new Date(ts * 1000);
@@ -323,11 +362,79 @@ jQuery(function() {
 		}
 	}
 
+	function getTagRulesFromDom() {
+		var rules = [];
+		jQuery('#dse-tag-rules .mnz-dse-tag-row').each(function(idx) {
+			var $row = jQuery(this);
+			var key = String($row.find('.mnz-dse-tag-key').val() || '').trim();
+			var operator = normTagOp($row.find('.mnz-dse-tag-operator').val());
+			var value = String($row.find('.mnz-dse-tag-value').val() || '').trim();
+			var join = normTagJoin($row.find('.mnz-dse-tag-join').val());
+			if (!key) {
+				return;
+			}
+			if (operator !== 'exists' && !value) {
+				return;
+			}
+			rules.push({
+				join: idx === 0 ? 'and' : join,
+				key: key,
+				operator: operator,
+				value: value
+			});
+		});
+		return rules;
+	}
+
+	function renderTagValuesDatalistForKey(key) {
+		var map = tagSuggestions && tagSuggestions.values_by_key ? tagSuggestions.values_by_key : {};
+		var vals = Array.isArray(map[String(key || '')]) ? map[String(key || '')] : [];
+		var html = '';
+		vals.slice(0, 200).forEach(function(v) {
+			html += '<option value="' + escapeHtml(String(v)) + '"></option>';
+		});
+		jQuery('#dse-tag-values-list').html(html);
+	}
+
+	function renderTagKeyDatalist(keys) {
+		var html = '';
+		(Array.isArray(keys) ? keys : []).slice(0, 300).forEach(function(k) {
+			html += '<option value="' + escapeHtml(String(k)) + '"></option>';
+		});
+		jQuery('#dse-tag-keys-list').html(html);
+	}
+
+	function renderTagRules(rules) {
+		var rows = normalizeTagRules(rules);
+		if (!rows.length) {
+			rows = [{ join: 'and', key: '', operator: 'equals', value: '' }];
+		}
+		var html = '';
+		rows.forEach(function(rule, idx) {
+			html += '<div class="mnz-dse-tag-row">' +
+				'<select class="mnz-dse-tag-join mnz-dse-input"' + (idx === 0 ? ' disabled' : '') + '>' +
+					'<option value="and"' + (normTagJoin(rule.join) === 'and' ? ' selected' : '') + '>AND</option>' +
+					'<option value="or"' + (normTagJoin(rule.join) === 'or' ? ' selected' : '') + '>OR</option>' +
+				'</select>' +
+				'<input type="text" class="mnz-dse-input mnz-dse-tag-key" placeholder="tag key (ex: db)" list="dse-tag-keys-list" value="' + escapeHtml(String(rule.key || '')) + '">' +
+				'<select class="mnz-dse-tag-operator mnz-dse-input">' +
+					'<option value="equals"' + (normTagOp(rule.operator) === 'equals' ? ' selected' : '') + '>equals</option>' +
+					'<option value="contains"' + (normTagOp(rule.operator) === 'contains' ? ' selected' : '') + '>contains</option>' +
+					'<option value="exists"' + (normTagOp(rule.operator) === 'exists' ? ' selected' : '') + '>exists</option>' +
+				'</select>' +
+				'<input type="text" class="mnz-dse-input mnz-dse-tag-value" placeholder="tag value (ex: postgresql)" list="dse-tag-values-list" value="' + escapeHtml(String(rule.value || '')) + '"' + (normTagOp(rule.operator) === 'exists' ? ' disabled' : '') + '>' +
+				'<button type="button" class="btn-alt mnz-dse-tag-remove"' + (rows.length === 1 ? ' disabled' : '') + '>x</button>' +
+			'</div>';
+		});
+		jQuery('#dse-tag-rules').html(html);
+	}
+
 	function captureCurrentViewState() {
 		return {
 			groupids: toStringArray(jQuery('#dse-groupids').val() || []),
 			hostids: toStringArray(jQuery('#dse-hostids').val() || []),
 			triggerids: toStringArray(jQuery('#dse-triggerids').val() || []),
+			tag_rules: getTagRulesFromDom(),
 			exclude_triggerids: String(jQuery('#dse-exclude-triggerids').val() || ''),
 			exclude_incidentids: String(jQuery('#dse-exclude-incidentids').val() || ''),
 			impact_level: String(jQuery('#dse-impact-level').val() || 'all'),
@@ -463,6 +570,7 @@ jQuery(function() {
 		jQuery('#dse-business-end').val(String(state.business_end || '18:00'));
 		jQuery('#dse-exclude-maintenance').prop('checked', Number(state.exclude_maintenance || 0) === 1);
 		jQuery('#dse-slo-target').val(String(state.slo_target || '99.9'));
+		renderTagRules(state.tag_rules || []);
 		applyPeriodPreset();
 
 		setSelectValues('#dse-groupids', state.groupids || state.groupids_csv || state.groupid || []);
@@ -939,6 +1047,7 @@ jQuery(function() {
 			severity_explicit: severity.severity_explicit,
 			exclude_triggerids: jQuery('#dse-exclude-triggerids').val(),
 			exclude_incidentids: jQuery('#dse-exclude-incidentids').val(),
+			tag_rules: JSON.stringify(getTagRulesFromDom()),
 			impact_level: jQuery('#dse-impact-level').val(),
 			business_mode: jQuery('#dse-business-mode').val(),
 			business_start: jQuery('#dse-business-start').val(),
@@ -980,6 +1089,14 @@ jQuery(function() {
 	}
 
 	function applyOptionsData(data, selectedGroups, selectedHosts, selectedTriggers, triggeredBy, sourceLabel) {
+		tagSuggestions = {
+			keys: Array.isArray(data.tag_keys) ? data.tag_keys : [],
+			values_by_key: data.tag_values_by_key && typeof data.tag_values_by_key === 'object' ? data.tag_values_by_key : {}
+		};
+		renderTagKeyDatalist(tagSuggestions.keys);
+		var firstKey = jQuery('#dse-tag-rules .mnz-dse-tag-key').first().val() || '';
+		renderTagValuesDatalistForKey(firstKey);
+
 		populateSelect('#dse-groupids', data.groups, selectedGroups);
 
 		if (triggeredBy === 'groups') {
@@ -1026,7 +1143,7 @@ jQuery(function() {
 			payload.hostids = '';
 			payload.triggerids = '';
 		}
-		else if (triggeredBy === 'hosts' || triggeredBy === 'severity' || triggeredBy === 'period' || triggeredBy === 'impact') {
+		else if (triggeredBy === 'hosts' || triggeredBy === 'severity' || triggeredBy === 'period' || triggeredBy === 'impact' || triggeredBy === 'tags') {
 			payload.triggerids = '';
 		}
 
@@ -1683,6 +1800,37 @@ jQuery(function() {
 		problemPagerState.page = 1;
 		loadOptions('impact');
 	});
+	jQuery('#dse-tag-add').on('click', function(e) {
+		e.preventDefault();
+		var rules = getTagRulesFromDom();
+		rules.push({ join: 'and', key: '', operator: 'equals', value: '' });
+		renderTagRules(rules);
+	});
+	jQuery(document).on('click', '.mnz-dse-tag-remove', function(e) {
+		e.preventDefault();
+		var rules = getTagRulesFromDom();
+		var idx = jQuery(this).closest('.mnz-dse-tag-row').index();
+		if (idx >= 0 && idx < rules.length) {
+			rules.splice(idx, 1);
+		}
+		renderTagRules(rules);
+		problemPagerState.page = 1;
+		loadOptions('tags');
+	});
+	jQuery(document).on('change', '.mnz-dse-tag-join,.mnz-dse-tag-operator,.mnz-dse-tag-key,.mnz-dse-tag-value', function() {
+		var $row = jQuery(this).closest('.mnz-dse-tag-row');
+		if ($row.length) {
+			var op = normTagOp($row.find('.mnz-dse-tag-operator').val());
+			$row.find('.mnz-dse-tag-value').prop('disabled', op === 'exists');
+			renderTagValuesDatalistForKey($row.find('.mnz-dse-tag-key').val() || '');
+		}
+		problemPagerState.page = 1;
+		loadOptions('tags');
+	});
+	jQuery(document).on('focus', '.mnz-dse-tag-value,.mnz-dse-tag-key', function() {
+		var $row = jQuery(this).closest('.mnz-dse-tag-row');
+		renderTagValuesDatalistForKey($row.find('.mnz-dse-tag-key').val() || '');
+	});
 	jQuery('#dse-refresh-options').on('click', function(e) {
 		e.preventDefault();
 		removeStorageKeys();
@@ -1914,6 +2062,7 @@ jQuery(function() {
 		jQuery('.mnz-dse-ms').removeClass('is-open');
 	});
 	applyPeriodPreset();
+	renderTagRules([]);
 	setupMultiSelects();
 	renderSavedViews();
 	renderAudit();

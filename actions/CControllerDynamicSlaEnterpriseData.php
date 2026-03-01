@@ -45,7 +45,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'exclude_maintenance' => 'string',
 			'slo_target' => 'string',
 			'timeline_page' => 'string',
-			'timeline_limit' => 'string'
+			'timeline_limit' => 'string',
+			'tag_rules' => 'string'
 		];
 
 		return $this->validateInput($fields);
@@ -132,6 +133,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'slo_target' => (string) $this->getInput('slo_target', '99.9'),
 			'timeline_page' => (string) $this->getInput('timeline_page', '1'),
 			'timeline_limit' => (string) $this->getInput('timeline_limit', '25'),
+			'tag_rules' => (string) $this->getInput('tag_rules', ''),
 			'userid' => (string) $this->getUserType()
 		];
 
@@ -174,12 +176,14 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		$severity_explicit = false;
 		$severities = [];
 		$impact_level = strtolower(trim((string) $this->getInput('impact_level', 'all')));
+		$tag_rules = $this->parseTagRules((string) $this->getInput('tag_rules', ''));
 		$debug = [
 			'input_groupids' => $groupids,
 			'input_hostids' => $hostids,
 			'input_severity' => $severities,
 			'severity_explicit' => $severity_explicit,
-			'impact_level' => $impact_level
+			'impact_level' => $impact_level,
+			'tag_rules_count' => count($tag_rules)
 		];
 
 		[$from_ts, $to_ts] = $this->resolveWindow(
@@ -309,6 +313,15 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			}));
 			$debug['impact_filter_after_count'] = count($triggers);
 		}
+		if ($tag_rules && $triggers) {
+			$tag_map = $this->getTriggerTagsMap(array_map('intval', array_column($triggers, 'triggerid')));
+			$allowed = array_flip($this->filterTriggeridsByTagRules(array_keys($tag_map), $tag_map, $tag_rules));
+			$triggers = array_values(array_filter($triggers, static function(array $trigger) use ($allowed): bool {
+				return isset($allowed[(int) ($trigger['triggerid'] ?? 0)]);
+			}));
+			$debug['tag_filter_after_count'] = count($triggers);
+		}
+		$tag_suggestions = $this->buildTagSuggestions(array_map('intval', array_column($triggers, 'triggerid')));
 
 		$groups_out = [];
 		foreach ($groups as $group) {
@@ -347,7 +360,9 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'window' => [
 				'from' => $from_ts,
 				'to' => $to_ts
-			]
+			],
+			'tag_keys' => $tag_suggestions['keys'],
+			'tag_values_by_key' => $tag_suggestions['values_by_key']
 		];
 	}
 
@@ -361,6 +376,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		$exclude_maintenance = ((int) $this->getInput('exclude_maintenance', '1') === 1);
 		$slo_target = max(0.0, min(100.0, (float) $this->getInput('slo_target', '99.9')));
 		$impact_level = strtolower(trim((string) $this->getInput('impact_level', 'all')));
+		$tag_rules = $this->parseTagRules((string) $this->getInput('tag_rules', ''));
 		$timeline_page = max(1, (int) $this->getInput('timeline_page', '1'));
 		$timeline_limit = max(10, min(500, (int) $this->getInput('timeline_limit', '25')));
 
@@ -412,6 +428,10 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 
 		$impact_map = $this->buildDependencyImpactMap($triggerids);
 		$triggerids = $this->filterTriggeridsByImpact($triggerids, $impact_map, $impact_level);
+		if ($tag_rules && $triggerids) {
+			$tag_map = $this->getTriggerTagsMap($triggerids);
+			$triggerids = $this->filterTriggeridsByTagRules($triggerids, $tag_map, $tag_rules);
+		}
 		if ($trigger_map) {
 			$allowed = array_flip($triggerids);
 			$trigger_map = array_filter($trigger_map, static function(string $tid) use ($allowed): bool {
@@ -420,7 +440,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		}
 
 		if (!$triggerids) {
-			return $this->buildEmptyPayload($from_ts, $to_ts, $slo_target, $groupids, $hostids, $severities, $business_mode, $business_start, $business_end, $exclude_maintenance, $exclude_triggerids, $impact_level);
+			return $this->buildEmptyPayload($from_ts, $to_ts, $slo_target, $groupids, $hostids, $severities, $business_mode, $business_start, $business_end, $exclude_maintenance, $exclude_triggerids, $impact_level, $tag_rules);
 		}
 
 		$incidents = $this->buildIncidentIntervals($triggerids, $from_ts, $to_ts, $exclude_triggerids, $exclude_incidentids);
@@ -598,6 +618,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'impact_level' => $impact_level,
 				'exclude_triggerids' => array_map('intval', array_keys($exclude_triggerids)),
 				'exclude_incidentids' => array_map('intval', array_keys($exclude_incidentids)),
+				'tag_rules' => $tag_rules,
 				'business_mode' => $business_mode,
 				'business_start' => $business_start,
 				'business_end' => $business_end,
@@ -657,6 +678,180 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			}
 		}
 		return array_values($out);
+	}
+
+	private function parseTagRules(string $raw): array {
+		$raw = trim($raw);
+		if ($raw === '') {
+			return [];
+		}
+
+		$decoded = json_decode($raw, true);
+		if (!is_array($decoded)) {
+			return [];
+		}
+
+		$out = [];
+		foreach ($decoded as $idx => $rule) {
+			if (!is_array($rule)) {
+				continue;
+			}
+			$key = trim((string) ($rule['key'] ?? ''));
+			if ($key === '') {
+				continue;
+			}
+			$operator = strtolower(trim((string) ($rule['operator'] ?? 'equals')));
+			if (!in_array($operator, ['equals', 'contains', 'exists'], true)) {
+				$operator = 'equals';
+			}
+			$value = trim((string) ($rule['value'] ?? ''));
+			if ($operator !== 'exists' && $value === '') {
+				continue;
+			}
+			$join = strtolower(trim((string) ($rule['join'] ?? 'and')));
+			$join = ($join === 'or') ? 'or' : 'and';
+			$out[] = [
+				'join' => ($idx === 0 ? 'and' : $join),
+				'key' => $key,
+				'operator' => $operator,
+				'value' => $value
+			];
+		}
+
+		return $out;
+	}
+
+	private function getTriggerTagsMap(array $triggerids): array {
+		$triggerids = array_values(array_unique(array_map('intval', $triggerids)));
+		if (!$triggerids) {
+			return [];
+		}
+
+		$out = [];
+		foreach (array_chunk($triggerids, 800) as $chunk) {
+			$rows = API::Trigger()->get([
+				'output' => ['triggerid'],
+				'triggerids' => $chunk,
+				'selectTags' => ['tag', 'value'],
+				'preservekeys' => false
+			]);
+			foreach ($rows as $row) {
+				$tid = (int) ($row['triggerid'] ?? 0);
+				if ($tid <= 0) {
+					continue;
+				}
+				$tags = [];
+				foreach ((array) ($row['tags'] ?? []) as $tag_row) {
+					$tag = trim((string) ($tag_row['tag'] ?? ''));
+					$val = trim((string) ($tag_row['value'] ?? ''));
+					if ($tag === '') {
+						continue;
+					}
+					$tags[] = ['tag' => $tag, 'value' => $val];
+				}
+				$out[$tid] = $tags;
+			}
+		}
+		return $out;
+	}
+
+	private function triggerMatchesTagRules(array $tags, array $rules): bool {
+		if (!$rules) {
+			return true;
+		}
+		$normalized = [];
+		foreach ($tags as $tag) {
+			$normalized[] = [
+				'tag' => strtolower((string) ($tag['tag'] ?? '')),
+				'value' => strtolower((string) ($tag['value'] ?? ''))
+			];
+		}
+
+		$result = null;
+		foreach ($rules as $idx => $rule) {
+			$key = strtolower((string) ($rule['key'] ?? ''));
+			$operator = strtolower((string) ($rule['operator'] ?? 'equals'));
+			$value = strtolower((string) ($rule['value'] ?? ''));
+			$rule_match = false;
+			foreach ($normalized as $tag) {
+				if ((string) $tag['tag'] !== $key) {
+					continue;
+				}
+				if ($operator === 'exists') {
+					$rule_match = true;
+					break;
+				}
+				if ($operator === 'contains') {
+					if ($value === '' || strpos((string) $tag['value'], $value) !== false) {
+						$rule_match = true;
+						break;
+					}
+					continue;
+				}
+				if ((string) $tag['value'] === $value) {
+					$rule_match = true;
+					break;
+				}
+			}
+
+			if ($idx === 0 || $result === null) {
+				$result = $rule_match;
+			}
+			else {
+				$join = strtolower((string) ($rule['join'] ?? 'and'));
+				$result = ($join === 'or') ? ((bool) $result || $rule_match) : ((bool) $result && $rule_match);
+			}
+		}
+
+		return (bool) $result;
+	}
+
+	private function filterTriggeridsByTagRules(array $triggerids, array $tag_map, array $rules): array {
+		$triggerids = array_values(array_unique(array_map('intval', $triggerids)));
+		if (!$rules || !$triggerids) {
+			return $triggerids;
+		}
+		$out = [];
+		foreach ($triggerids as $tid) {
+			$tags = (array) ($tag_map[$tid] ?? []);
+			if ($this->triggerMatchesTagRules($tags, $rules)) {
+				$out[] = $tid;
+			}
+		}
+		return $out;
+	}
+
+	private function buildTagSuggestions(array $triggerids): array {
+		$tag_map = $this->getTriggerTagsMap($triggerids);
+		$keys = [];
+		$values_by_key = [];
+		foreach ($tag_map as $tags) {
+			foreach ((array) $tags as $tag_row) {
+				$key = trim((string) ($tag_row['tag'] ?? ''));
+				$val = trim((string) ($tag_row['value'] ?? ''));
+				if ($key === '') {
+					continue;
+				}
+				$keys[$key] = true;
+				if (!isset($values_by_key[$key])) {
+					$values_by_key[$key] = [];
+				}
+				if ($val !== '' && count($values_by_key[$key]) < 200) {
+					$values_by_key[$key][$val] = true;
+				}
+			}
+		}
+		$keys = array_keys($keys);
+		sort($keys, SORT_NATURAL | SORT_FLAG_CASE);
+		foreach ($values_by_key as $key => $vals) {
+			$list = array_keys($vals);
+			sort($list, SORT_NATURAL | SORT_FLAG_CASE);
+			$values_by_key[$key] = $list;
+		}
+		return [
+			'keys' => $keys,
+			'values_by_key' => $values_by_key
+		];
 	}
 
 	private function normalizeSeverityFilter(bool $severity_explicit, array $severities): array {
@@ -1007,7 +1202,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 	}
 
 
-	private function buildEmptyPayload(int $from_ts, int $to_ts, float $slo_target, array $groupids, array $hostids, array $severities, string $business_mode, string $business_start, string $business_end, bool $exclude_maintenance, array $exclude_triggerids, string $impact_level = 'all'): array {
+	private function buildEmptyPayload(int $from_ts, int $to_ts, float $slo_target, array $groupids, array $hostids, array $severities, string $business_mode, string $business_start, string $business_end, bool $exclude_maintenance, array $exclude_triggerids, string $impact_level = 'all', array $tag_rules = []): array {
 		$den = max(1, $to_ts - $from_ts);
 		return [
 			'note' => _('No triggers found for selected filters.'),
@@ -1036,6 +1231,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'triggerids' => [],
 				'severity' => $severities,
 				'impact_level' => $impact_level,
+				'tag_rules' => $tag_rules,
 				'exclude_triggerids' => array_map('intval', array_keys($exclude_triggerids)),
 				'exclude_incidentids' => [],
 				'business_mode' => $business_mode,

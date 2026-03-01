@@ -94,6 +94,17 @@ $filters = (new CDiv([
 			->addClass('mnz-dse-input mnz-dse-multi')
 	]))->addClass('mnz-dse-field'),
 	(new CDiv([
+		(new CLabel(_('Trigger tags (AND/OR)'), 'dse-tag-rules'))->addClass('mnz-dse-label'),
+		(new CDiv())
+			->setId('dse-tag-rules')
+			->addClass('mnz-dse-tag-rules'),
+		(new CDiv([
+			(new CButton('dse-tag-add', _('Add tag rule')))
+				->setId('dse-tag-add')
+				->addClass(ZBX_STYLE_BTN_ALT)
+		]))->addClass('mnz-dse-tag-actions')
+	]))->addClass('mnz-dse-field'),
+	(new CDiv([
 		(new CLabel(_('Exclude trigger IDs'), 'dse-exclude-triggerids'))->addClass('mnz-dse-label'),
 		(new CTextBox('exclude_triggerids', ''))
 			->setId('dse-exclude-triggerids')
@@ -228,6 +239,8 @@ $content->addItem(
 		->setAttribute('id', 'dse-import-file')
 		->setAttribute('style', 'display:none')
 );
+$content->addItem((new CTag('datalist', true, ''))->setId('dse-tag-keys-list'));
+$content->addItem((new CTag('datalist', true, ''))->setId('dse-tag-values-list'));
 
 $html_page->addItem($content);
 $html_page->show();
