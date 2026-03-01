@@ -35,21 +35,47 @@ $fmt_filters = static function(array $vals): string {
 	return implode(', ', array_map('strval', $vals));
 };
 
-$to_human = static function($seconds): string {
-	$s = (int) $seconds;
-	if ($s <= 0) {
-		return '0m';
+$duration_to_seconds = static function($value): int {
+	if (is_int($value) || is_float($value) || (is_string($value) && preg_match('/^\d+$/', trim($value)))) {
+		return max(0, (int) $value);
 	}
-	$d = (int) floor($s / 86400);
-	$h = (int) floor(($s % 86400) / 3600);
+	$s = strtolower(trim((string) $value));
+	if ($s === '') {
+		return 0;
+	}
+	if (preg_match('/^(\d+):(\d{2}):(\d{2})$/', $s, $m)) {
+		return ((int) $m[1] * 3600) + ((int) $m[2] * 60) + (int) $m[3];
+	}
+	$total = 0;
+	if (preg_match_all('/(\d+)\s*([dhms])/', $s, $parts, PREG_SET_ORDER)) {
+		foreach ($parts as $p) {
+			$n = (int) ($p[1] ?? 0);
+			$u = (string) ($p[2] ?? '');
+			if ($u === 'd') {
+				$total += $n * 86400;
+			}
+			elseif ($u === 'h') {
+				$total += $n * 3600;
+			}
+			elseif ($u === 'm') {
+				$total += $n * 60;
+			}
+			elseif ($u === 's') {
+				$total += $n;
+			}
+		}
+	}
+	return max(0, $total);
+};
+
+$to_hms = static function($seconds): string {
+	$s = max(0, (int) $seconds);
+	$h = (int) floor($s / 3600);
 	$m = (int) floor(($s % 3600) / 60);
-	if ($d > 0) {
-		return $d.'d '.$h.'h '.$m.'m';
-	}
-	if ($h > 0) {
-		return $h.'h '.$m.'m';
-	}
-	return $m.'m';
+	$sec = $s % 60;
+	return str_pad((string) $h, 2, '0', STR_PAD_LEFT).':'
+		.str_pad((string) $m, 2, '0', STR_PAD_LEFT).':'
+		.str_pad((string) $sec, 2, '0', STR_PAD_LEFT);
 };
 
 $pill_for_severity = static function($label): string {
@@ -208,7 +234,7 @@ $cover_page = (new CDiv([
 $kpi_grid = (new CDiv([
 	(new CDiv([new CTag('small', true, _('Availability')), (new CTag('div', true, $fmt_pct($summary['availability'] ?? null)))->addClass('dse-rpt-kpi')]))->addClass('dse-rpt-kpi-card'),
 	(new CDiv([new CTag('small', true, _('SLO target')), (new CTag('div', true, $fmt_pct($summary['slo_target'] ?? null)))->addClass('dse-rpt-kpi')]))->addClass('dse-rpt-kpi-card'),
-	(new CDiv([new CTag('small', true, _('Downtime')), (new CTag('div', true, (string) ($summary['downtime'] ?? '-')))->addClass('dse-rpt-kpi')]))->addClass('dse-rpt-kpi-card'),
+	(new CDiv([new CTag('small', true, _('Downtime')), (new CTag('div', true, $to_hms($duration_to_seconds($summary['downtime_seconds'] ?? ($summary['downtime'] ?? 0)))))->addClass('dse-rpt-kpi')]))->addClass('dse-rpt-kpi-card'),
 	(new CDiv([new CTag('small', true, _('Incidents')), (new CTag('div', true, (string) $incidents))->addClass('dse-rpt-kpi')]))->addClass('dse-rpt-kpi-card'),
 	(new CDiv([new CTag('small', true, _('Total impact')), (new CTag('div', true, (string) $total_impact))->addClass('dse-rpt-kpi')]))->addClass('dse-rpt-kpi-card')
 ]))->addClass('dse-rpt-kpi-grid');
@@ -228,7 +254,7 @@ foreach (array_slice($hosts_impact, 0, 20) as $row) {
 		(string) ($row['host'] ?? '-'),
 		(new CSpan((string) (int) ($row['impact'] ?? 0)))->addClass('dse-rpt-num'),
 		(new CSpan((string) (int) ($row['triggers'] ?? 0)))->addClass('dse-rpt-num'),
-		(new CSpan($to_human($row['downtime_seconds'] ?? 0)))->addClass('dse-rpt-num')
+		(new CSpan($to_hms($duration_to_seconds($row['downtime_seconds'] ?? ($row['downtime'] ?? 0)))))->addClass('dse-rpt-num')
 	]);
 }
 
@@ -244,7 +270,7 @@ foreach (array_slice($top_triggers, 0, 25) as $row) {
 		isset($row['start']) ? date('d/m/Y, H:i:s', (int) $row['start']) : '-',
 		(new CSpan($severity_label))->addClass($pill_for_severity($severity_label)),
 		(new CSpan((string) (int) ($row['impact'] ?? 0)))->addClass('dse-rpt-num'),
-		(new CSpan((string) ($row['downtime'] ?? '-')))->addClass('dse-rpt-num')
+		(new CSpan($to_hms($duration_to_seconds($row['downtime_seconds'] ?? ($row['downtime'] ?? 0)))))->addClass('dse-rpt-num')
 	]);
 }
 
@@ -297,7 +323,7 @@ foreach (array_slice($timeline, 0, 120) as $row) {
 		(new CSpan($severity_label))->addClass($pill_for_severity($severity_label)),
 		(string) ($row['host'] ?? '-'),
 		(string) ($row['trigger_name'] ?? '-'),
-		(new CSpan((string) ($row['duration'] ?? '-')))->addClass('dse-rpt-num')
+		(new CSpan($to_hms($duration_to_seconds($row['duration_seconds'] ?? ($row['duration'] ?? 0)))))->addClass('dse-rpt-num')
 	]);
 }
 
@@ -360,7 +386,7 @@ elseif ($persona === 'gestao') {
 		(new CTag('h3', true, _('Performance highlights')))->addClass('dse-rpt-card-title dse-rpt-card-title-kpi'),
 		(new CList())
 			->addItem(_('Availability') . ': ' . $fmt_pct($summary['availability'] ?? null))
-			->addItem(_('Downtime') . ': ' . (string) ($summary['downtime'] ?? '-'))
+			->addItem(_('Downtime') . ': ' . $to_hms($duration_to_seconds($summary['downtime_seconds'] ?? ($summary['downtime'] ?? 0))))
 			->addItem(_('Incidents') . ': ' . (string) $incidents)
 			->addItem(_('Total impact') . ': ' . (string) $total_impact)
 	]))->addClass('dse-rpt-info-card');

@@ -81,21 +81,67 @@ jQuery(function() {
 		return n.toFixed(2) + '%';
 	}
 
-	function fmtDownShort(seconds) {
+	function fmtHms(seconds) {
 		var s = Number(seconds || 0);
-		if (!isFinite(s) || s <= 0) {
-			return '0m';
+		if (!isFinite(s) || s < 0) {
+			s = 0;
 		}
-		var d = Math.floor(s / 86400);
-		var h = Math.floor((s % 86400) / 3600);
-		var m = Math.floor((s % 3600) / 60);
-		if (d > 0) {
-			return d + 'd ' + h + 'h';
+		s = Math.floor(s);
+		var hh = Math.floor(s / 3600);
+		var mm = Math.floor((s % 3600) / 60);
+		var ss = s % 60;
+		return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+	}
+
+	function parseDurationTextToSeconds(text) {
+		var t = String(text || '').trim().toLowerCase();
+		if (!t) {
+			return 0;
 		}
-		if (h > 0) {
-			return h + 'h ' + m + 'm';
+		var total = 0;
+		var re = /(\d+)\s*([dhms])/g;
+		var m;
+		while ((m = re.exec(t)) !== null) {
+			var n = Number(m[1] || 0);
+			var u = String(m[2] || '');
+			if (!isFinite(n) || n < 0) {
+				continue;
+			}
+			if (u === 'd') {
+				total += n * 86400;
+			}
+			else if (u === 'h') {
+				total += n * 3600;
+			}
+			else if (u === 'm') {
+				total += n * 60;
+			}
+			else if (u === 's') {
+				total += n;
+			}
 		}
-		return m + 'm';
+		return total;
+	}
+
+	function durationToHms(secondsOrText, fallbackText) {
+		var s = Number(secondsOrText || 0);
+		if (!isFinite(s) || s < 0) {
+			s = 0;
+		}
+		if (s <= 0 && fallbackText != null) {
+			s = parseDurationTextToSeconds(fallbackText);
+		}
+		return fmtHms(s);
+	}
+
+	function getWindowHms(summary) {
+		var s = summary && typeof summary === 'object' ? summary : {};
+		var fromTs = Number(s.window_from || 0);
+		var toTs = Number(s.window_to || 0);
+		if (isFinite(fromTs) && isFinite(toTs) && toTs > fromTs) {
+			return fmtHms(toTs - fromTs);
+		}
+		return durationToHms(0, s.window_label || '');
 	}
 
 	function setStatus(message, type) {
@@ -370,6 +416,18 @@ jQuery(function() {
 			var operator = normTagOp($row.find('.mnz-dse-tag-operator').val());
 			var value = String($row.find('.mnz-dse-tag-value').val() || '').trim();
 			var join = normTagJoin($row.find('.mnz-dse-tag-join').val());
+			if (!value && key.indexOf(':') > 0) {
+				var p = key.split(':');
+				key = String(p.shift() || '').trim();
+				value = String(p.join(':') || '').trim();
+			}
+			if (!value && /\s+/.test(key)) {
+				var m = key.match(/^(\S+)\s+(.+)$/);
+				if (m) {
+					key = String(m[1] || '').trim();
+					value = String(m[2] || '').trim();
+				}
+			}
 			if (!key) {
 				return;
 			}
@@ -381,6 +439,20 @@ jQuery(function() {
 				key: key,
 				operator: operator,
 				value: value
+			});
+		});
+		return rules;
+	}
+
+	function getTagRulesUiState() {
+		var rules = [];
+		jQuery('#dse-tag-rules .mnz-dse-tag-row').each(function(idx) {
+			var $row = jQuery(this);
+			rules.push({
+				join: idx === 0 ? 'and' : normTagJoin($row.find('.mnz-dse-tag-join').val()),
+				key: String($row.find('.mnz-dse-tag-key').val() || '').trim(),
+				operator: normTagOp($row.find('.mnz-dse-tag-operator').val()),
+				value: String($row.find('.mnz-dse-tag-value').val() || '').trim()
 			});
 		});
 		return rules;
@@ -405,7 +477,18 @@ jQuery(function() {
 	}
 
 	function renderTagRules(rules) {
-		var rows = normalizeTagRules(rules);
+		var rows = [];
+		(Array.isArray(rules) ? rules : []).forEach(function(rule, idx) {
+			if (!rule || typeof rule !== 'object') {
+				return;
+			}
+			rows.push({
+				join: idx === 0 ? 'and' : normTagJoin(rule.join),
+				key: String(rule.key || '').trim(),
+				operator: normTagOp(rule.operator),
+				value: String(rule.value || '').trim()
+			});
+		});
 		if (!rows.length) {
 			rows = [{ join: 'and', key: '', operator: 'equals', value: '' }];
 		}
@@ -1178,15 +1261,17 @@ jQuery(function() {
 
 	function renderExecutive(data) {
 		var ex = data.executive || {};
+		var summary = data.summary || {};
 		var risk = String(ex.current_incident_risk || 'Low');
 		var riskCls = risk.toLowerCase() === 'high' ? 'mnz-dse-risk-high' : (risk.toLowerCase() === 'medium' ? 'mnz-dse-risk-medium' : 'mnz-dse-risk-low');
+		var downtimeSeconds = Number(ex.downtime_window_seconds || summary.downtime_seconds || 0);
 		var html = '' +
 			'<div class="mnz-dse-panel">' +
 				'<div class="mnz-dse-section-title">Executive Summary</div>' +
 				'<div class="mnz-dse-cards mnz-dse-cards-exec">' +
 					'<div class="mnz-dse-card"><div class="mnz-dse-k">Current Incident Risk</div><div class="mnz-dse-badge ' + riskCls + '">' + risk + '</div></div>' +
 					'<div class="mnz-dse-card"><div class="mnz-dse-k">SLA Achieved</div><div class="mnz-dse-v">' + fmtPct(ex.sla_achieved) + '</div></div>' +
-					'<div class="mnz-dse-card"><div class="mnz-dse-k">Downtime</div><div class="mnz-dse-v">' + (ex.downtime_window || '-') + '</div></div>' +
+					'<div class="mnz-dse-card"><div class="mnz-dse-k">Downtime</div><div class="mnz-dse-v">' + durationToHms(downtimeSeconds, ex.downtime_window || summary.downtime || '') + '</div></div>' +
 					'<div class="mnz-dse-card"><div class="mnz-dse-k">Incidents</div><div class="mnz-dse-v">' + Number(ex.incidents_this_window || 0) + '</div></div>' +
 					'<div class="mnz-dse-card"><div class="mnz-dse-k">Triggers Impacted</div><div class="mnz-dse-v">' + Number(ex.services_impacted || 0) + '</div></div>' +
 					'<div class="mnz-dse-card"><div class="mnz-dse-k">Total impact</div><div class="mnz-dse-v mnz-dse-impact-' + impactBand(ex.total_impact_window) + '">' + Number(ex.total_impact_window || 0) + '</div></div>' +
@@ -1199,13 +1284,16 @@ jQuery(function() {
 		var s = data.summary || {};
 		var gap = parseFloat(s.slo_gap || 0);
 		var gapClass = gap >= 0 ? 'mnz-dse-gap-good' : 'mnz-dse-gap-bad';
+		var downtimeHms = durationToHms(s.downtime_seconds || 0, s.downtime || '');
+		var uptimeHms = durationToHms(s.uptime_seconds || 0, s.uptime || '');
+		var mttrHms = durationToHms(s.mttr_seconds || 0, s.mttr || '');
 		var html = '<div class="mnz-dse-panel"><div class="mnz-dse-section-title">Dynamic SLA Intelligence</div><div class="mnz-dse-cards">' +
 			'<div class="mnz-dse-card"><div class="mnz-dse-k">Availability</div><div class="mnz-dse-v">' + fmtPct(s.availability) + '</div></div>' +
 			'<div class="mnz-dse-card"><div class="mnz-dse-k">SLO Target</div><div class="mnz-dse-v">' + fmtPct(s.slo_target) + '</div></div>' +
 			'<div class="mnz-dse-card"><div class="mnz-dse-k">Gap</div><div class="mnz-dse-v ' + gapClass + '">' + (gap >= 0 ? '+' : '') + (isNaN(gap) ? '-' : gap.toFixed(2) + '%') + '</div></div>' +
-			'<div class="mnz-dse-card"><div class="mnz-dse-k">Downtime</div><div class="mnz-dse-v">' + (s.downtime || '-') + '</div></div>' +
-			'<div class="mnz-dse-card"><div class="mnz-dse-k">Uptime</div><div class="mnz-dse-v">' + (s.uptime || '-') + '</div></div>' +
-			'<div class="mnz-dse-card"><div class="mnz-dse-k">MTTR</div><div class="mnz-dse-v">' + (s.mttr || '-') + '</div></div>' +
+			'<div class="mnz-dse-card"><div class="mnz-dse-k">Downtime</div><div class="mnz-dse-v">' + downtimeHms + '</div></div>' +
+			'<div class="mnz-dse-card"><div class="mnz-dse-k">Uptime</div><div class="mnz-dse-v">' + uptimeHms + '</div></div>' +
+			'<div class="mnz-dse-card"><div class="mnz-dse-k">MTTR</div><div class="mnz-dse-v">' + mttrHms + '</div></div>' +
 			'</div></div>';
 		jQuery('#dse-summary').html(html);
 	}
@@ -1309,7 +1397,7 @@ jQuery(function() {
 			'</div>' +
 			'<div class="mnz-dse-insights-grid">' +
 				'<div class="mnz-dse-insight-card"><div class="mnz-dse-k">Horario comercial vs fora</div><div class="mnz-dse-v2">' + inPct.toFixed(2) + '% / ' + outPct.toFixed(2) + '%</div><div class="mnz-dse-bizbar" title="In business: ' + inPct.toFixed(2) + '% | Outside: ' + outPct.toFixed(2) + '%"><span class="mnz-dse-bizbar-in" style="width:' + inBar.toFixed(2) + '%"></span><span class="mnz-dse-bizbar-out" style="width:' + outBar.toFixed(2) + '%"></span></div><div class="mnz-dse-bizbar-legend"><span><i class="mnz-dse-dot mnz-dse-dot-in"></i>In business</span><span><i class="mnz-dse-dot mnz-dse-dot-out"></i>Outside</span></div></div>' +
-				'<div class="mnz-dse-insight-card"><div class="mnz-dse-k">MTTR por severidade (pior)</div><div class="mnz-dse-v2">' + escapeHtml(worstSev) + ' - ' + fmtDownShort(worstMttr) + '</div></div>' +
+				'<div class="mnz-dse-insight-card"><div class="mnz-dse-k">MTTR por severidade (pior)</div><div class="mnz-dse-v2">' + escapeHtml(worstSev) + ' - ' + fmtHms(worstMttr) + '</div></div>' +
 				'<div class="mnz-dse-insight-card"><div class="mnz-dse-k">SLO burn rate (14d)</div><div class="mnz-dse-v2">' + burnRate.toFixed(2) + '/dia (' + burnRisk + ')</div>' + bars + '</div>' +
 			'</div>' +
 		'</div>';
@@ -1510,7 +1598,7 @@ jQuery(function() {
 				'<td>' + start + '</td>' +
 				'<td><span class="mnz-dse-sev ' + severityBadgeClass(row.severity) + '">' + String(row.severity_label || '-').replace(/</g, '&lt;') + '</span></td>' +
 				'<td><div class="mnz-dse-impact-wrap" title="' + impactTip + '"><span class="mnz-dse-impact-badge mnz-dse-impact-' + band + '">' + band + '</span><span class="mnz-dse-impact-val">' + Math.round(impact) + '</span><span class="mnz-dse-impact-bar"><span class="mnz-dse-impact-fill mnz-dse-impact-fill-' + band + '" style="width:' + pct + '%"></span></span></div></td>' +
-				'<td>' + String(row.downtime || '-') + '</td>' +
+				'<td>' + fmtHms(Number(row.downtime_seconds || parseDurationTextToSeconds(row.downtime || 0))) + '</td>' +
 				'<td><button type="button" class="btn-alt mnz-dse-exclude-btn" data-triggerid="' + row.triggerid + '">Exclude</button></td>' +
 			'</tr>';
 		});
@@ -1545,7 +1633,7 @@ jQuery(function() {
 			var impact = Number(row.impact || 0);
 			var pct = Math.max(2, Math.round((impact / Math.max(1, maxImpact)) * 100));
 			var band = String(row.impact_level || impactBand(Number(row.impact_avg || impact)));
-			var tip = 'Impact: ' + Math.round(impact) + ' | Triggers: ' + Number(row.triggers || 0) + ' | Downtime: ' + fmtDownShort(Number(row.downtime_seconds || 0));
+			var tip = 'Impact: ' + Math.round(impact) + ' | Triggers: ' + Number(row.triggers || 0) + ' | Downtime: ' + durationToHms(row.downtime_seconds || 0, row.downtime || '');
 			html += '<div class="mnz-dse-hostimpact-row" title="' + tip.replace(/"/g, '&quot;') + '">' +
 				'<span class="mnz-dse-hostimpact-name">' + String(row.host || '-').replace(/</g, '&lt;') + '</span>' +
 				'<span class="mnz-dse-hostimpact-bar"><span class="mnz-dse-hostimpact-fill mnz-dse-impact-fill-' + band + '" style="width:' + pct + '%"></span></span>' +
@@ -1607,6 +1695,11 @@ jQuery(function() {
 			if (!tagsLabel) {
 				tagsLabel = '-';
 			}
+			var tagsParts = tagsLabel === '-' ? [] : tagsLabel.split('|').map(function(p) { return String(p).trim(); }).filter(Boolean);
+			var tagsDisplay = tagsLabel;
+			if (tagsParts.length > 3) {
+				tagsDisplay = tagsParts.slice(0, 3).join(' | ') + ' | +' + (tagsParts.length - 3) + ' more';
+			}
 			html += '<tr data-incidentid="' + incidentId + '"' +
 				' data-startts="' + Number(row.start || 0) + '"' +
 				' data-endts="' + Number(row.end || 0) + '"' +
@@ -1623,8 +1716,8 @@ jQuery(function() {
 				'<td><span class="mnz-dse-sev ' + severityBadgeClass(row.severity) + '">' + String(row.severity_label || '-').replace(/</g, '&lt;') + '</span></td>' +
 				'<td>' + String(row.host || '-').replace(/</g, '&lt;') + '</td>' +
 				'<td>' + String(row.trigger_name || '-').replace(/</g, '&lt;') + '</td>' +
-				'<td title="' + escapeHtml(tagsLabel) + '">' + escapeHtml(tagsLabel) + '</td>' +
-				'<td>' + String(row.duration || '-') + '</td>' +
+				'<td class="mnz-dse-tags-cell" title="' + escapeHtml(tagsLabel) + '">' + escapeHtml(tagsDisplay) + '</td>' +
+				'<td>' + fmtHms(Number(row.duration_seconds || 0)) + '</td>' +
 				'<td>' + (incidentId > 0 ? '<button type="button" class="btn-alt mnz-dse-exclude-incident-btn" data-incidentid="' + incidentId + '">Exclude</button>' : '-') + '</td>' +
 			'</tr>';
 		});
@@ -1729,7 +1822,7 @@ jQuery(function() {
 				renderTopTriggers(cached);
 				renderTimeline(cached);
 			}, 0);
-			pushAudit('calc', { source: 'cache', window: String(cached.summary && cached.summary.window_label ? cached.summary.window_label : '') });
+			pushAudit('calc', { source: 'cache', window: getWindowHms(cached.summary || {}) });
 			setStatus('SLA calculation loaded from cache', 'ok');
 			btn.prop('disabled', false).text(d.runLabel || 'Calculate SLA');
 			return;
@@ -1759,7 +1852,7 @@ jQuery(function() {
 				renderTopTriggers(res.data);
 				renderTimeline(res.data);
 			}, 0);
-			pushAudit('calc', { source: (res.data && res.data.cache && res.data.cache.hit) ? 'server-cache' : 'api', window: String(res.data.summary && res.data.summary.window_label ? res.data.summary.window_label : '') });
+			pushAudit('calc', { source: (res.data && res.data.cache && res.data.cache.hit) ? 'server-cache' : 'api', window: getWindowHms((res.data && res.data.summary) ? res.data.summary : {}) });
 			setStatus((res.data && res.data.note) ? res.data.note : 'SLA calculation finished', (res.data && res.data.note) ? 'error' : 'ok');
 		}).fail(function(jqXHR) {
 			setStatus(parseError(jqXHR, d.failedLabel || 'Failed to calculate SLA'), 'error');
@@ -1819,13 +1912,13 @@ jQuery(function() {
 	});
 	jQuery('#dse-tag-add').on('click', function(e) {
 		e.preventDefault();
-		var rules = getTagRulesFromDom();
+		var rules = getTagRulesUiState();
 		rules.push({ join: 'and', key: '', operator: 'equals', value: '' });
 		renderTagRules(rules);
 	});
 	jQuery(document).on('click', '.mnz-dse-tag-remove', function(e) {
 		e.preventDefault();
-		var rules = getTagRulesFromDom();
+		var rules = getTagRulesUiState();
 		var idx = jQuery(this).closest('.mnz-dse-tag-row').index();
 		if (idx >= 0 && idx < rules.length) {
 			rules.splice(idx, 1);

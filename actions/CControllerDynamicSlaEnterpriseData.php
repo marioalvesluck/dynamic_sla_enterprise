@@ -314,8 +314,12 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			$debug['impact_filter_after_count'] = count($triggers);
 		}
 		if ($tag_rules && $triggers) {
-			$tag_map = $this->getTriggerTagsMap(array_map('intval', array_column($triggers, 'triggerid')));
-			$allowed = array_flip($this->filterTriggeridsByTagRules(array_keys($tag_map), $tag_map, $tag_rules));
+			$allowed = array_flip($this->filterTriggeridsByEventTagsWindow(
+				array_map('intval', array_column($triggers, 'triggerid')),
+				$from_ts,
+				$to_ts,
+				$tag_rules
+			));
 			$triggers = array_values(array_filter($triggers, static function(array $trigger) use ($allowed): bool {
 				return isset($allowed[(int) ($trigger['triggerid'] ?? 0)]);
 			}));
@@ -429,8 +433,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		$impact_map = $this->buildDependencyImpactMap($triggerids);
 		$triggerids = $this->filterTriggeridsByImpact($triggerids, $impact_map, $impact_level);
 		if ($tag_rules && $triggerids) {
-			$tag_map = $this->getTriggerTagsMap($triggerids);
-			$triggerids = $this->filterTriggeridsByTagRules($triggerids, $tag_map, $tag_rules);
+			$triggerids = $this->filterTriggeridsByEventTagsWindow($triggerids, $from_ts, $to_ts, $tag_rules);
 		}
 		if ($trigger_map) {
 			$allowed = array_flip($triggerids);
@@ -616,7 +619,9 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'downtime' => $this->fmtDuration((int) $total_downtime_sum),
 				'downtime_union_seconds' => (int) $total_downtime,
 				'downtime_union' => $this->fmtDuration((int) $total_downtime),
+				'uptime_seconds' => (int) $total_uptime,
 				'uptime' => $this->fmtDuration((int) $total_uptime),
+				'mttr_seconds' => (int) $mttr_seconds,
 				'mttr' => $this->fmtDuration($mttr_seconds),
 				'risk' => $risk,
 				'total_impact' => (int) $total_impact,
@@ -640,6 +645,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'executive' => [
 				'current_incident_risk' => $risk,
 				'sla_achieved' => round($availability, 3),
+				'downtime_window_seconds' => (int) $total_downtime_sum,
 				'downtime_window' => $this->fmtDuration((int) $total_downtime_sum),
 				'incidents_this_window' => count($timeline_rows),
 				'services_impacted' => count($top_triggers),
@@ -718,6 +724,15 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				$operator = 'equals';
 			}
 			$value = trim((string) ($rule['value'] ?? ''));
+			if ($value === '' && strpos($key, ':') !== false) {
+				$parts = explode(':', $key, 2);
+				$key = trim((string) ($parts[0] ?? ''));
+				$value = trim((string) ($parts[1] ?? ''));
+			}
+			if ($value === '' && preg_match('/^(\S+)\s+(.+)$/', $key, $m)) {
+				$key = trim((string) ($m[1] ?? ''));
+				$value = trim((string) ($m[2] ?? ''));
+			}
 			if ($operator !== 'exists' && $value === '') {
 				continue;
 			}
@@ -832,6 +847,51 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			}
 		}
 		return $out;
+	}
+
+	private function filterTriggeridsByEventTagsWindow(array $triggerids, int $from_ts, int $to_ts, array $rules): array {
+		$triggerids = array_values(array_unique(array_map('intval', $triggerids)));
+		if (!$rules || !$triggerids) {
+			return $triggerids;
+		}
+
+		$matched = [];
+		$time_from = max(0, $from_ts - (90 * 86400));
+		foreach (array_chunk($triggerids, 800) as $chunk) {
+			$events = API::Event()->get([
+				'output' => ['eventid', 'objectid', 'value', 'clock'],
+				'selectTags' => ['tag', 'value'],
+				'source' => EVENT_SOURCE_TRIGGERS,
+				'object' => EVENT_OBJECT_TRIGGER,
+				'objectids' => $chunk,
+				'time_from' => $time_from,
+				'time_till' => $to_ts,
+				'sortfield' => ['clock', 'eventid'],
+				'sortorder' => 'ASC',
+				'limit' => 100000,
+				'preservekeys' => false
+			]);
+
+			foreach ($events as $event) {
+				if ((int) ($event['value'] ?? 0) !== 1) {
+					continue;
+				}
+				$clock = (int) ($event['clock'] ?? 0);
+				if ($clock > $to_ts) {
+					continue;
+				}
+				$tid = (int) ($event['objectid'] ?? 0);
+				if ($tid <= 0 || isset($matched[$tid])) {
+					continue;
+				}
+				$tags = (array) ($event['tags'] ?? []);
+				if ($this->triggerMatchesTagRules($tags, $rules)) {
+					$matched[$tid] = true;
+				}
+			}
+		}
+
+		return array_values(array_map('intval', array_keys($matched)));
 	}
 
 	private function buildTagSuggestions(array $triggerids): array {
@@ -1231,7 +1291,9 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'downtime' => $this->fmtDuration(0),
 				'downtime_union_seconds' => 0,
 				'downtime_union' => $this->fmtDuration(0),
+				'uptime_seconds' => (int) $den,
 				'uptime' => $this->fmtDuration($den),
+				'mttr_seconds' => 0,
 				'mttr' => $this->fmtDuration(0),
 				'risk' => 'Low',
 				'total_impact' => 0,
@@ -1255,6 +1317,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 			'executive' => [
 				'current_incident_risk' => 'Low',
 				'sla_achieved' => 100.0,
+				'downtime_window_seconds' => 0,
 				'downtime_window' => $this->fmtDuration(0),
 				'incidents_this_window' => 0,
 				'services_impacted' => 0,
