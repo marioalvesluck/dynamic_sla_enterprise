@@ -1584,6 +1584,7 @@ jQuery(function() {
 			'<th class="mnz-dse-sortable" data-key="severity" data-type="num">Severity</th>' +
 			'<th class="mnz-dse-sortable" data-key="host" data-type="text">Host</th>' +
 			'<th class="mnz-dse-sortable" data-key="trigger" data-type="text">Trigger</th>' +
+			'<th class="mnz-dse-sortable" data-key="tags" data-type="text">Problem tags</th>' +
 			'<th class="mnz-dse-sortable" data-key="duration" data-type="num">Duration</th>' +
 			'<th>Action</th>' +
 			'</tr></thead><tbody>';
@@ -1592,6 +1593,20 @@ jQuery(function() {
 			var end = row.end ? new Date(row.end * 1000).toLocaleString() : '-';
 			var statusCls = row.status === 'PROBLEM' ? 'mnz-dse-status-bad' : 'mnz-dse-status-good';
 			var incidentId = Number(row.incidentid || 0);
+			var tagsLabel = String(row.tags_label || '').trim();
+			if (!tagsLabel && Array.isArray(row.tags)) {
+				tagsLabel = row.tags.map(function(tag) {
+					var k = String((tag && tag.tag) || '').trim();
+					var v = String((tag && tag.value) || '').trim();
+					if (!k) {
+						return '';
+					}
+					return v ? (k + ':' + v) : k;
+				}).filter(Boolean).join(' | ');
+			}
+			if (!tagsLabel) {
+				tagsLabel = '-';
+			}
 			html += '<tr data-incidentid="' + incidentId + '"' +
 				' data-startts="' + Number(row.start || 0) + '"' +
 				' data-endts="' + Number(row.end || 0) + '"' +
@@ -1599,6 +1614,7 @@ jQuery(function() {
 				' data-severity="' + Number(row.severity || 0) + '"' +
 				' data-host="' + escapeHtml(String(row.host || '-').toLowerCase()) + '"' +
 				' data-trigger="' + escapeHtml(String(row.trigger_name || '-').toLowerCase()) + '"' +
+				' data-tags="' + escapeHtml(String(tagsLabel).toLowerCase()) + '"' +
 				' data-duration="' + Number(row.duration_seconds || 0) + '">' +
 				'<td>' + (incidentId > 0 ? String(incidentId) : '-') + '</td>' +
 				'<td>' + start + '</td>' +
@@ -1607,6 +1623,7 @@ jQuery(function() {
 				'<td><span class="mnz-dse-sev ' + severityBadgeClass(row.severity) + '">' + String(row.severity_label || '-').replace(/</g, '&lt;') + '</span></td>' +
 				'<td>' + String(row.host || '-').replace(/</g, '&lt;') + '</td>' +
 				'<td>' + String(row.trigger_name || '-').replace(/</g, '&lt;') + '</td>' +
+				'<td title="' + escapeHtml(tagsLabel) + '">' + escapeHtml(tagsLabel) + '</td>' +
 				'<td>' + String(row.duration || '-') + '</td>' +
 				'<td>' + (incidentId > 0 ? '<button type="button" class="btn-alt mnz-dse-exclude-incident-btn" data-incidentid="' + incidentId + '">Exclude</button>' : '-') + '</td>' +
 			'</tr>';

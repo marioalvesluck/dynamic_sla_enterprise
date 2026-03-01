@@ -472,6 +472,17 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 
 			$tid = (int) $incident['triggerid'];
 
+			$tags = (array) ($incident['tags'] ?? []);
+			$tag_pairs = [];
+			foreach ($tags as $tag_row) {
+				$tag_key = trim((string) ($tag_row['tag'] ?? ''));
+				if ($tag_key === '') {
+					continue;
+				}
+				$tag_val = trim((string) ($tag_row['value'] ?? ''));
+				$tag_pairs[] = $tag_val !== '' ? ($tag_key.':'.$tag_val) : $tag_key;
+			}
+
 			$timeline_rows[] = [
 				'incidentid' => (int) ($incident['incidentid'] ?? 0),
 				'triggerid' => $tid,
@@ -479,6 +490,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 				'host' => $trigger_map[$tid]['host'] ?? '-',
 				'severity' => (int) ($trigger_map[$tid]['severity'] ?? $incident['severity'] ?? 0),
 				'severity_label' => $this->severityName((int) ($trigger_map[$tid]['severity'] ?? $incident['severity'] ?? 0)),
+				'tags' => $tags,
+				'tags_label' => implode(' | ', $tag_pairs),
 				'start' => (int) $incident['s'],
 				'end' => (int) $incident['e'],
 				'effective_start' => (int) ($effective_start ?? $incident['s']),
@@ -1355,6 +1368,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 		foreach (array_chunk($triggerids, 800) as $chunk) {
 			$events_window = API::Event()->get([
 				'output' => ['eventid', 'objectid', 'clock', 'value', 'severity', 'name'],
+				'selectTags' => ['tag', 'value'],
 				'source' => EVENT_SOURCE_TRIGGERS,
 				'object' => EVENT_OBJECT_TRIGGER,
 				'objectids' => $chunk,
@@ -1368,6 +1382,7 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 
 			$events_before = API::Event()->get([
 				'output' => ['eventid', 'objectid', 'clock', 'value', 'severity', 'name'],
+				'selectTags' => ['tag', 'value'],
 				'source' => EVENT_SOURCE_TRIGGERS,
 				'object' => EVENT_OBJECT_TRIGGER,
 				'objectids' => $chunk,
@@ -1397,7 +1412,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 					'incidentid' => $incidentid,
 					'clock' => $from_ts,
 					'severity' => (int) ($event['severity'] ?? 0),
-					'name' => (string) ($event['name'] ?? '')
+					'name' => (string) ($event['name'] ?? ''),
+					'tags' => (array) ($event['tags'] ?? [])
 				];
 			}
 
@@ -1419,7 +1435,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 							'incidentid' => $incidentid,
 							'clock' => $clock,
 							'severity' => (int) ($event['severity'] ?? 0),
-							'name' => (string) ($event['name'] ?? '')
+							'name' => (string) ($event['name'] ?? ''),
+							'tags' => (array) ($event['tags'] ?? [])
 						];
 					}
 					continue;
@@ -1433,7 +1450,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 						's' => (int) $start['clock'],
 						'e' => $clock,
 						'severity' => (int) ($start['severity'] ?? 0),
-						'name' => (string) ($start['name'] ?? '')
+						'name' => (string) ($start['name'] ?? ''),
+						'tags' => (array) ($start['tags'] ?? [])
 					];
 					unset($pending[$tid]);
 				}
@@ -1449,7 +1467,8 @@ class CControllerDynamicSlaEnterpriseData extends CController {
 					's' => (int) $start['clock'],
 					'e' => $to_ts,
 					'severity' => (int) ($start['severity'] ?? 0),
-					'name' => (string) ($start['name'] ?? '')
+					'name' => (string) ($start['name'] ?? ''),
+					'tags' => (array) ($start['tags'] ?? [])
 				];
 			}
 		}
